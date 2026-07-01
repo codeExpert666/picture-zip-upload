@@ -8,6 +8,7 @@ import com.example.picturezipupload.dto.CreateUploadResponse;
 import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.dto.UploadProgressResponse;
 import com.example.picturezipupload.service.PictureZipUploadService;
+import com.example.picturezipupload.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -42,7 +43,9 @@ class PictureZipUploadControllerTest {
     @BeforeEach
     void setUp() {
         uploadService = mock(PictureZipUploadService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new PictureZipUploadController(uploadService)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new PictureZipUploadController(uploadService))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -69,6 +72,28 @@ class PictureZipUploadControllerTest {
         verify(uploadService).createUpload(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getBusinessArea()).isEqualTo("medical");
         assertThat(requestCaptor.getValue().getOperator()).isEqualTo("alice");
+    }
+
+    @Test
+    void returnsFieldValidationMessagesWhenCreateRequestInvalid() throws Exception {
+        mockMvc.perform(post("/api/picture-zip/uploads")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "originalFilename": "",
+                                  "totalChunks": 0,
+                                  "totalSize": 0,
+                                  "businessArea": "",
+                                  "operator": "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("请求参数校验失败"))
+                .andExpect(jsonPath("$.errors.originalFilename").value("原始文件名不能为空"))
+                .andExpect(jsonPath("$.errors.totalChunks").value("总分片数必须大于等于 1"))
+                .andExpect(jsonPath("$.errors.totalSize").value("文件总大小必须大于 0"))
+                .andExpect(jsonPath("$.errors.businessArea").value("业务领域不能为空"))
+                .andExpect(jsonPath("$.errors.operator").value("操作人长度不能超过 50 个字符"));
     }
 
     @Test

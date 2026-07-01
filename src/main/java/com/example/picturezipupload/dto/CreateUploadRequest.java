@@ -10,21 +10,36 @@ import jakarta.validation.constraints.Size;
  */
 public class CreateUploadRequest {
 
-    @NotBlank
+    /**
+     * 用户上传的原始 zip 文件名，用于进度展示和导入记录追溯。
+     */
+    @NotBlank(message = "原始文件名不能为空")
     private String originalFilename;
 
-    @Min(1)
+    /**
+     * 前端切分出的分片总数，必须至少包含一个分片。
+     */
+    @Min(value = 1, message = "总分片数必须大于等于 1")
     private int totalChunks;
 
-    @Positive
+    /**
+     * 原始 zip 文件总字节数，用于前端展示和服务端基础校验。
+     */
+    @Positive(message = "文件总大小必须大于 0")
     private long totalSize;
 
-    @NotBlank
-    @Size(max = 50)
+    /**
+     * 图片所属业务领域，服务端会根据该值路由到对应业务图片表。
+     */
+    @NotBlank(message = "业务领域不能为空")
+    @Size(max = 50, message = "业务领域长度不能超过 50 个字符")
     private String businessArea;
 
-    @NotBlank
-    @Size(max = 50)
+    /**
+     * 发起上传的操作人，用于导入审计和重复图片更新记录。
+     */
+    @NotBlank(message = "操作人不能为空")
+    @Size(max = 50, message = "操作人长度不能超过 50 个字符")
     private String operator;
 
     public String getOriginalFilename() {
