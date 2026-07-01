@@ -69,7 +69,7 @@ public class ZipPictureImportService {
     }
 
     /**
-     * 导入 zip 中的根目录图片文件。
+     * 导入 zip 中安全相对路径下的图片文件。
      *
      * <p>单个非法条目只计入失败数，不中断整个压缩包；zip 读取或存储异常才会使任务失败。</p>
      */
@@ -138,11 +138,12 @@ public class ZipPictureImportService {
     private void importEntry(String uploadId, String originalZipName, String businessArea, String operator, InputStream input,
                              ZipArchiveEntry entry, UploadTaskProgress progress) throws IOException {
         String entryName = entry.getName();
-        if (!ZipEntryNameValidator.isRootFile(entryName)) {
+        if (!ZipEntryNameValidator.isSafeRelativeFile(entryName)) {
             progress.recordFailedFile();
             return;
         }
-        String extname = extractExtname(entryName);
+        String baseName = PictureFileNameUtils.baseName(entryName);
+        String extname = PictureFileNameUtils.extractExtname(baseName);
         if (!ImageTypeDetector.isAllowedExtension(extname)) {
             progress.recordFailedFile();
             return;
@@ -156,7 +157,7 @@ public class ZipPictureImportService {
         }
 
         String normalizedExt = ImageTypeDetector.normalizeExt(extname);
-        String filename = truncate(extractFilenameWithoutExt(entryName), 100);
+        String filename = PictureFileNameUtils.truncate(PictureFileNameUtils.extractFilenameWithoutExt(baseName), 100);
         Optional<PictureRecord> existing = repository.findByContentSha256(businessArea, candidate.sha256());
         if (existing.isPresent()) {
             Files.deleteIfExists(candidate.tempPath());
@@ -256,29 +257,6 @@ public class ZipPictureImportService {
      */
     private String publicUrlFor(String sha256, String extname) {
         return properties.getPublicUrlPrefix() + "/" + sha256.substring(0, 2) + "/" + sha256 + "." + extname;
-    }
-
-    private static String extractExtname(String filename) {
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == filename.length() - 1) {
-            return "";
-        }
-        return filename.substring(dotIndex + 1);
-    }
-
-    private static String extractFilenameWithoutExt(String filename) {
-        int dotIndex = filename.lastIndexOf('.');
-        if (dotIndex <= 0) {
-            return filename;
-        }
-        return filename.substring(0, dotIndex);
-    }
-
-    private static String truncate(String value, int maxLength) {
-        if (value == null || value.length() <= maxLength) {
-            return value;
-        }
-        return value.substring(0, maxLength);
     }
 
     /**

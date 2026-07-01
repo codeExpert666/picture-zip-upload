@@ -160,7 +160,7 @@ GET /api/picture-zip/uploads/{uploadId}
 1. **本地上传阶段**：根据每个分片的 `onUploadProgress` 计算上传百分比。
 2. **后台处理阶段**：调用 `complete` 后轮询后端进度，用 `processedFiles / totalFiles` 展示导入百分比，同时展示 `inserted`、`duplicated`、`failed`。
 
-`totalFiles` 表示 zip 内非目录条目总数；目录不参与导入进度，根目录外文件、非图片扩展名和图片魔数不匹配的条目会计入 `failed`，同时也会推进 `processedFiles`。
+`totalFiles` 表示 zip 内非目录条目总数；目录不参与导入进度。后端支持安全相对目录中的图片文件，路径穿越、绝对路径、反斜杠路径、非图片扩展名和图片魔数不匹配的条目会计入 `failed`，同时也会推进 `processedFiles`。
 
 推荐参数：
 

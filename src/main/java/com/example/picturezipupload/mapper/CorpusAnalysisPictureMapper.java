@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -101,4 +102,55 @@ public interface CorpusAnalysisPictureMapper {
                                @Param("originalZipName") String originalZipName,
                                @Param("operator") String operator,
                                @Param("updateTime") LocalDateTime updateTime);
+
+    /**
+     * 查询缺少新增元数据的历史记录，用于维护脚本回填。
+     */
+    @Select("""
+            SELECT
+                voice_code AS voiceCode,
+                filename,
+                extname,
+                file_URL AS fileUrl,
+                import_time AS importTime,
+                update_time AS updateTime,
+                file_path AS filePath,
+                status,
+                content_sha256 AS contentSha256,
+                file_size AS fileSize,
+                upload_id AS uploadId,
+                original_zip_name AS originalZipName,
+                operator
+            FROM ${tableName}
+            WHERE content_sha256 IS NULL
+               OR file_size IS NULL
+               OR file_size = 0
+            ORDER BY import_time ASC, voice_code ASC
+            LIMIT #{limit}
+            """)
+    List<PictureRecord> findRecordsMissingMetadata(@Param("tableName") String tableName,
+                                                   @Param("limit") int limit);
+
+    /**
+     * 回填历史记录的内容哈希和文件大小。
+     */
+    @Update("""
+            UPDATE ${tableName}
+            SET
+                content_sha256 = #{contentSha256},
+                file_size = #{fileSize},
+                upload_id = #{uploadId},
+                original_zip_name = #{originalZipName},
+                operator = #{operator},
+                update_time = #{updateTime}
+            WHERE voice_code = #{voiceCode}
+            """)
+    void updateBackfillMetadata(@Param("tableName") String tableName,
+                                @Param("voiceCode") String voiceCode,
+                                @Param("contentSha256") String contentSha256,
+                                @Param("fileSize") long fileSize,
+                                @Param("uploadId") String uploadId,
+                                @Param("originalZipName") String originalZipName,
+                                @Param("operator") String operator,
+                                @Param("updateTime") LocalDateTime updateTime);
 }

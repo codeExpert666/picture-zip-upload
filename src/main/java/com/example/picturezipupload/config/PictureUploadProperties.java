@@ -55,6 +55,11 @@ public class PictureUploadProperties {
      */
     private Map<String, String> businessAreaTables = new LinkedHashMap<>();
 
+    /**
+     * 额外静态资源目录，用于临时直接上传目录等不复制到正式 images 目录的图片。
+     */
+    private Map<String, StaticLocation> extraStaticLocations = new LinkedHashMap<>();
+
     public Path getRootPath() {
         return rootPath;
     }
@@ -119,6 +124,16 @@ public class PictureUploadProperties {
         this.businessAreaTables = businessAreaTables == null ? new LinkedHashMap<>() : new LinkedHashMap<>(businessAreaTables);
     }
 
+    public Map<String, StaticLocation> getExtraStaticLocations() {
+        return extraStaticLocations;
+    }
+
+    public void setExtraStaticLocations(Map<String, StaticLocation> extraStaticLocations) {
+        this.extraStaticLocations = extraStaticLocations == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(extraStaticLocations);
+    }
+
     public Path chunksPath() {
         return rootPath.resolve("chunks");
     }
@@ -153,5 +168,35 @@ public class PictureUploadProperties {
             trimmed = trimmed.substring(0, trimmed.length() - 1);
         }
         return trimmed;
+    }
+
+    /**
+     * 一个额外静态资源 URL 前缀和本地目录的映射。
+     */
+    public static class StaticLocation {
+
+        private Path rootPath;
+
+        private String publicUrlPrefix;
+
+        public Path getRootPath() {
+            return rootPath;
+        }
+
+        public void setRootPath(Path rootPath) {
+            this.rootPath = rootPath;
+        }
+
+        public String getPublicUrlPrefix() {
+            return publicUrlPrefix;
+        }
+
+        public void setPublicUrlPrefix(String publicUrlPrefix) {
+            if (publicUrlPrefix == null || publicUrlPrefix.isBlank()) {
+                this.publicUrlPrefix = null;
+                return;
+            }
+            this.publicUrlPrefix = trimTrailingSlash(publicUrlPrefix);
+        }
     }
 }

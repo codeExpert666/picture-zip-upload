@@ -8,17 +8,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ZipEntryNameValidatorTest {
 
     @Test
-    void acceptsOnlyFilesInZipRootDirectory() {
-        assertThat(ZipEntryNameValidator.isRootFile("a.jpg")).isTrue();
-        assertThat(ZipEntryNameValidator.isRootFile("中文图片.png")).isTrue();
+    void acceptsSafeRelativeFilesIncludingNestedChineseDirectories() {
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("a.jpg")).isTrue();
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("中文目录/第一批/中文图片.png")).isTrue();
     }
 
     @Test
-    void rejectsNestedOrUnsafePaths() {
-        assertThat(ZipEntryNameValidator.isRootFile("dir/a.jpg")).isFalse();
-        assertThat(ZipEntryNameValidator.isRootFile("dir\\a.jpg")).isFalse();
-        assertThat(ZipEntryNameValidator.isRootFile("../a.jpg")).isFalse();
-        assertThat(ZipEntryNameValidator.isRootFile("/a.jpg")).isFalse();
-        assertThat(ZipEntryNameValidator.isRootFile("")).isFalse();
+    void rejectsUnsafePaths() {
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("dir\\a.jpg")).isFalse();
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("../a.jpg")).isFalse();
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("dir/../a.jpg")).isFalse();
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("/a.jpg")).isFalse();
+        assertThat(ZipEntryNameValidator.isSafeRelativeFile("")).isFalse();
     }
 }

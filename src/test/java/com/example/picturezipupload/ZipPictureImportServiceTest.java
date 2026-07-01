@@ -90,7 +90,30 @@ class ZipPictureImportServiceTest {
         assertThat(progress.getTotalFiles()).isEqualTo(3);
         assertThat(progress.getProcessedFiles()).isEqualTo(3);
         assertThat(progress.getInserted()).isEqualTo(1);
-        assertThat(progress.getFailed()).isEqualTo(2);
+        assertThat(progress.getDuplicated()).isEqualTo(1);
+        assertThat(progress.getFailed()).isEqualTo(1);
+    }
+
+    @Test
+    void importsNestedZipImagesAndStoresOnlyBaseFilename() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        properties.setPublicUrlPrefix("/api/pictures/files");
+        InMemoryPictureRecordRepository repository = new InMemoryPictureRecordRepository();
+        InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
+        ZipPictureImportService service = new ZipPictureImportService(properties, repository, progressStore);
+        Path zip = tempDir.resolve("nested-upload.zip");
+
+        createZip(zip, new ZipImage("病理图像/第一批/中文图片.png", tinyPng()));
+
+        service.importZip("upload-3", "dataset.zip", "medical", "alice", zip);
+
+        assertThat(repository.inserted).hasSize(1);
+        assertThat(repository.inserted.get(0).getFilename()).isEqualTo("中文图片");
+        UploadTaskProgress progress = progressStore.get("upload-3").orElseThrow();
+        assertThat(progress.getTotalFiles()).isEqualTo(1);
+        assertThat(progress.getInserted()).isEqualTo(1);
+        assertThat(progress.getFailed()).isZero();
     }
 
     private static void createZip(Path zip, ZipImage... images) throws IOException {

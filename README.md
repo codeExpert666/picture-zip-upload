@@ -8,12 +8,12 @@
 - 支持分片 `MD5` 或 `SHA-256` 校验，避免传输损坏的分片落盘。
 - 服务端按分片序号合并 zip。
 - 后台异步、流式解压 zip，避免把压缩包或图片整体读入内存。
-- 只处理 zip 根目录下的图片文件。
+- 支持 zip 内安全相对目录中的图片文件。
 - 按图片内容 `SHA-256` 判重，图片名不同但内容相同只保留一份物理文件。
 - 新图片按 `businessArea` 写入对应的 `xxx_corpus_analysis_picture`，默认 `status = MARK`。
 - 重复图片不重复存储，不新增记录，只更新 `filename`、`extname`、`update_time`、`upload_id`、`original_zip_name`、`operator`。
 - Redis 或内存记录上传与后台导入进度，包含导入总文件数 `totalFiles`。
-- 通过 `/api/pictures/files/**` 提供图片访问。
+- 通过 `/api/pictures/files/**` 提供接口上传图片访问，可配置额外静态目录访问直接上传图片。
 
 ## 接口
 
@@ -122,6 +122,22 @@ export PICTURE_UPLOAD_ROOT=/data/picture-upload
   tmp/{uploadId}/...
 ```
 
+额外静态目录可用于零复制访问数据组直接上传的图片：
+
+```yaml
+picture-upload:
+  extra-static-locations:
+    direct:
+      root-path: /data/pictures
+      public-url-prefix: /api/pictures/direct
+```
+
+例如 `/data/pictures/病理 图像/第一批/图片 001.png` 的 `file_URL` 应保存为按路径段 UTF-8 编码后的 URL：
+
+```text
+/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png
+```
+
 ## 数据库
 
 执行：
@@ -138,7 +154,44 @@ picture-upload:
     medical: medical_corpus_analysis_picture
 ```
 
-`content_sha256` 是单张业务表内的判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。
+`content_sha256` 是单张业务表内的判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。历史表迁移时先执行 `db/picture-maintenance-migration.sql` 中的字段扩容和新增字段语句，完成旧记录回填并处理冲突后，再添加 `uk_picture_sha256` 唯一索引。
+
+## 维护脚本
+
+历史表尚未新增字段时，推荐顺序：
+
+1. 备份目标业务表。
+2. 执行 `db/picture-maintenance-migration.sql` 的字段扩容和新增可空字段部分。
+3. 部署包含额外静态目录配置的应用。
+4. dry-run 旧记录回填脚本。
+5. 正式执行旧记录回填脚本。
+6. 处理内容哈希冲突报告。
+7. 添加 `content_sha256` 唯一索引。
+8. dry-run 新目录导入脚本。
+9. 正式执行新目录导入脚本。
+10. 抽样验证旧图、新图、中文路径 URL。
+
+旧记录回填优先使用表内 `file_path`，缺失时再用 `file_URL` 结合静态映射反推本地路径：
+
+```bash
+scripts/backfill-existing-picture-records.sh \
+  --business-area medical \
+  --operator data-team \
+  --batch-id legacy-backfill-20260701 \
+  --dry-run true
+```
+
+新目录导入会递归扫描 `/data/pictures`，不复制、不移动图片，只写入原始 `file_path` 和编码后的 `file_URL`：
+
+```bash
+scripts/import-direct-picture-directory.sh \
+  --business-area medical \
+  --source-root /data/pictures \
+  --public-url-prefix /api/pictures/direct \
+  --operator data-team \
+  --batch-id direct-import-20260701 \
+  --dry-run true
+```
 
 ## Redis 进度
 
