@@ -9,8 +9,16 @@ import org.apache.ibatis.annotations.Update;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+/**
+ * {@code corpus_analysis_picture} 表 MyBatis Mapper。
+ *
+ * <p>表字段命名沿用存量库，其中 {@code file_URL} 通过别名映射到 Java 字段 {@code fileUrl}。</p>
+ */
 public interface CorpusAnalysisPictureMapper {
 
+    /**
+     * 根据内容哈希查询图片记录，用于导入前判重。
+     */
     @Select("""
             SELECT
                 voice_code AS voiceCode,
@@ -31,6 +39,9 @@ public interface CorpusAnalysisPictureMapper {
             """)
     Optional<PictureRecord> findByContentSha256(@Param("contentSha256") String contentSha256);
 
+    /**
+     * 插入首次导入的图片记录。
+     */
     @Insert("""
             INSERT INTO corpus_analysis_picture (
                 voice_code,
@@ -62,6 +73,11 @@ public interface CorpusAnalysisPictureMapper {
             """)
     void insert(PictureRecord record);
 
+    /**
+     * 记录重复图片的最新导入信息。
+     *
+     * <p>这里刻意不更新状态、物理路径和首次导入时间，避免覆盖既有标注流程。</p>
+     */
     @Update("""
             UPDATE corpus_analysis_picture
             SET

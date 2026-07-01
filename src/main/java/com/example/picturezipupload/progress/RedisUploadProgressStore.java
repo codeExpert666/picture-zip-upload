@@ -8,6 +8,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
 import java.util.Optional;
 
+/**
+ * Redis 版进度存储。
+ *
+ * <p>进度设置过期时间，避免长期堆积已完成或失败的上传任务。</p>
+ */
 public class RedisUploadProgressStore implements UploadProgressStore {
 
     private static final String KEY_PREFIX = "picture-upload:";

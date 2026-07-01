@@ -2,6 +2,11 @@ package com.example.picturezipupload.domain;
 
 import java.time.LocalDateTime;
 
+/**
+ * 上传任务进度快照。
+ *
+ * <p>同一个对象同时表达分片上传进度和后台导入统计，便于前端轮询一个接口即可展示完整流程。</p>
+ */
 public class UploadTaskProgress {
 
     private String uploadId;
@@ -17,6 +22,9 @@ public class UploadTaskProgress {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    /**
+     * 创建一个等待上传分片的任务进度。
+     */
     public static UploadTaskProgress created(String uploadId, String originalFilename, int totalChunks) {
         LocalDateTime now = LocalDateTime.now();
         UploadTaskProgress progress = new UploadTaskProgress();
@@ -61,23 +69,35 @@ public class UploadTaskProgress {
         touch();
     }
 
+    /**
+     * 记录已接收一个分片。
+     */
     public void recordChunkUploaded() {
         this.uploadedChunks++;
         markUploading();
     }
 
+    /**
+     * 记录一张新图片已入库。
+     */
     public void recordInserted() {
         this.processedFiles++;
         this.inserted++;
         touch();
     }
 
+    /**
+     * 记录一张重复图片已按既有记录处理。
+     */
     public void recordDuplicated() {
         this.processedFiles++;
         this.duplicated++;
         touch();
     }
 
+    /**
+     * 记录一个 zip 条目被过滤或处理失败。
+     */
     public void recordFailedFile() {
         this.processedFiles++;
         this.failed++;

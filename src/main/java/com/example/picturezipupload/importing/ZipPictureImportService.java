@@ -32,9 +32,17 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * zip 图片导入服务。
+ *
+ * <p>服务按 zip 条目流式处理图片，边写临时文件边计算 SHA-256，再根据内容哈希完成物理文件和数据库去重。</p>
+ */
 @Service
 public class ZipPictureImportService {
 
+    /**
+     * 读取文件头用于图片魔数校验；当前支持格式的魔数最长不超过 12 字节。
+     */
     private static final int FIRST_BYTES_LIMIT = 16;
 
     private final PictureUploadProperties properties;
@@ -48,12 +56,20 @@ public class ZipPictureImportService {
         this.progressStore = progressStore;
     }
 
+    /**
+     * 异步导入合并后的 zip 文件。
+     */
     @Async("pictureImportExecutor")
     public CompletableFuture<Void> importZipAsync(String uploadId, String originalZipName, Path zipFile) {
         importZip(uploadId, originalZipName, zipFile);
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * 导入 zip 中的根目录图片文件。
+     *
+     * <p>单个非法条目只计入失败数，不中断整个压缩包；zip 读取或存储异常才会使任务失败。</p>
+     */
     public void importZip(String uploadId, String originalZipName, Path zipFile) {
         UploadTaskProgress progress = progressStore.get(uploadId)
                 .orElseGet(() -> UploadTaskProgress.processing(uploadId, originalZipName));
@@ -84,6 +100,11 @@ public class ZipPictureImportService {
         }
     }
 
+    /**
+     * 处理单个 zip 条目。
+     *
+     * <p>重复图片只更新既有记录的导入元数据，不改变标注状态，也不覆盖原物理文件。</p>
+     */
     private void importEntry(String uploadId, String originalZipName, InputStream input,
                              ZipArchiveEntry entry, UploadTaskProgress progress) throws IOException {
         String entryName = entry.getName();
@@ -138,6 +159,9 @@ public class ZipPictureImportService {
         }
     }
 
+    /**
+     * 将 zip 条目写入临时文件，同时计算内容 SHA-256 和读取文件头。
+     */
     private StoredCandidate writeCandidate(String uploadId, InputStream input) throws IOException {
         Path importTempDir = properties.tempPath().resolve(uploadId);
         Files.createDirectories(importTempDir);
@@ -147,6 +171,7 @@ public class ZipPictureImportService {
         ByteArrayOutputStream firstBytes = new ByteArrayOutputStream(FIRST_BYTES_LIMIT);
         long fileSize = 0;
 
+        // 这里不能关闭 DigestInputStream，否则会连带关闭外层 ZipArchiveInputStream。
         DigestInputStream digestInput = new DigestInputStream(input, digest);
         try (OutputStream output = new BufferedOutputStream(Files.newOutputStream(
                      tempPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
@@ -175,6 +200,11 @@ public class ZipPictureImportService {
         return properties.imagesPath().resolve(sha256.substring(0, 2)).resolve(sha256 + "." + extname);
     }
 
+    /**
+     * 将候选图片移动到内容哈希确定的正式路径。
+     *
+     * <p>如果并发任务已经创建了相同文件，当前临时文件直接删除，数据库唯一索引会继续兜底。</p>
+     */
     private void moveCandidateToFinalPath(Path tempPath, Path finalPath) throws IOException {
         Files.createDirectories(finalPath.getParent());
         try {
@@ -190,6 +220,9 @@ public class ZipPictureImportService {
         }
     }
 
+    /**
+     * 图片 URL 与静态资源映射目录保持同样的两级哈希路径。
+     */
     private String publicUrlFor(String sha256, String extname) {
         return properties.getPublicUrlPrefix() + "/" + sha256.substring(0, 2) + "/" + sha256 + "." + extname;
     }
@@ -217,6 +250,9 @@ public class ZipPictureImportService {
         return value.substring(0, maxLength);
     }
 
+    /**
+     * 已写入临时目录、等待判重入库的图片候选文件。
+     */
     private record StoredCandidate(Path tempPath, String sha256, long fileSize, byte[] firstBytes) {
     }
 }

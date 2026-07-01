@@ -4,6 +4,9 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
+/**
+ * 创建压缩包上传任务的请求参数。
+ */
 public class CreateUploadRequest {
 
     @NotBlank

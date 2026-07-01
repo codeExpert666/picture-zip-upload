@@ -14,6 +14,11 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.UUID;
 
+/**
+ * 压缩包上传应用服务。
+ *
+ * <p>该类只编排任务状态、分片存储和后台导入，不直接处理 zip 条目或数据库判重。</p>
+ */
 @Service
 public class PictureZipUploadService {
 
@@ -28,6 +33,9 @@ public class PictureZipUploadService {
         this.progressStore = progressStore;
     }
 
+    /**
+     * 创建上传任务并初始化进度。
+     */
     public CreateUploadResponse createUpload(CreateUploadRequest request) {
         String uploadId = UUID.randomUUID().toString();
         UploadTaskProgress progress = UploadTaskProgress.created(
@@ -38,6 +46,9 @@ public class PictureZipUploadService {
         return new CreateUploadResponse(uploadId, progress.getStatus());
     }
 
+    /**
+     * 保存单个分片并更新已上传分片数。
+     */
     public UploadProgressResponse uploadChunk(String uploadId, int chunkIndex, InputStream inputStream) throws IOException {
         UploadTaskProgress progress = loadProgress(uploadId);
         storageService.saveChunk(uploadId, chunkIndex, inputStream);
@@ -46,6 +57,9 @@ public class PictureZipUploadService {
         return UploadProgressResponse.from(progress);
     }
 
+    /**
+     * 合并所有分片并异步导入 zip，接口立即返回 PROCESSING 状态供前端轮询。
+     */
     public UploadProgressResponse complete(String uploadId) throws IOException {
         UploadTaskProgress progress = loadProgress(uploadId);
         progress.markMerging();

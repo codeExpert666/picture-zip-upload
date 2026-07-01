@@ -3,6 +3,11 @@ package com.example.picturezipupload.domain;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * {@code corpus_analysis_picture} 表对应的图片记录。
+ *
+ * <p>原表的主键仍使用 {@code voice_code}，内容判重由 {@code contentSha256} 承担。</p>
+ */
 public class PictureRecord {
 
     private String voiceCode;
@@ -18,6 +23,11 @@ public class PictureRecord {
     private String uploadId;
     private String originalZipName;
 
+    /**
+     * 创建一条首次导入的新图片记录。
+     *
+     * <p>新图片默认进入待标注状态；重复图片不会走该工厂方法，而是更新既有记录的导入元数据。</p>
+     */
     public static PictureRecord imported(String filename, String extname, String fileUrl, String filePath,
                                          String contentSha256, long fileSize, String uploadId,
                                          String originalZipName, LocalDateTime now) {

@@ -13,6 +13,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * 本地文件系统上传存储服务。
+ *
+ * <p>负责分片落盘、顺序合并和临时分片清理，不参与图片判重和数据库写入。</p>
+ */
 @Service
 public class FileUploadStorageService {
 
@@ -22,6 +27,11 @@ public class FileUploadStorageService {
         this.properties = properties;
     }
 
+    /**
+     * 保存一个分片。
+     *
+     * <p>先写临时文件再原子移动到正式分片名，避免进程中断时留下半个正式分片。</p>
+     */
     public void saveChunk(String uploadId, int chunkIndex, InputStream inputStream) throws IOException {
         if (chunkIndex < 0) {
             throw new IllegalArgumentException("分片序号不能小于 0");
@@ -37,6 +47,11 @@ public class FileUploadStorageService {
         Files.move(tempPath, chunkPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
+    /**
+     * 按分片序号顺序合并 zip 文件。
+     *
+     * <p>任一分片缺失都会失败，避免生成不完整压缩包进入后台导入流程。</p>
+     */
     public Path mergeChunks(String uploadId, String originalFilename, int totalChunks) throws IOException {
         if (totalChunks <= 0) {
             throw new IllegalArgumentException("分片总数必须大于 0");
@@ -65,6 +80,9 @@ public class FileUploadStorageService {
         return mergedZip;
     }
 
+    /**
+     * 分片文件名使用固定宽度序号，便于排查目录内容时保持自然排序。
+     */
     private Path chunkPath(String uploadId, int chunkIndex) {
         return properties.chunksPath().resolve(uploadId).resolve(String.format("chunk-%06d.part", chunkIndex));
     }

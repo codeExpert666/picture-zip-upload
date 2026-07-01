@@ -7,6 +7,9 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+/**
+ * 基于 MyBatis 的图片记录仓储实现。
+ */
 @Repository
 public class MyBatisPictureRecordRepository implements PictureRecordRepository {
 
