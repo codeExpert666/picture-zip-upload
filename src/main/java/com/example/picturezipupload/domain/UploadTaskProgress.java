@@ -14,6 +14,7 @@ public class UploadTaskProgress {
     private UploadStatus status;
     private int totalChunks;
     private int uploadedChunks;
+    private long totalFiles;
     private long processedFiles;
     private long inserted;
     private long duplicated;
@@ -157,6 +158,17 @@ public class UploadTaskProgress {
 
     public void setUploadedChunks(int uploadedChunks) {
         this.uploadedChunks = uploadedChunks;
+    }
+
+    public long getTotalFiles() {
+        return totalFiles;
+    }
+
+    public void setTotalFiles(long totalFiles) {
+        if (totalFiles < 0) {
+            throw new IllegalArgumentException("导入文件总数不能小于 0");
+        }
+        this.totalFiles = totalFiles;
     }
 
     public long getProcessedFiles() {

@@ -105,4 +105,17 @@ class PictureZipUploadControllerTest {
 
         verify(uploadService).cancelUpload("upload-1");
     }
+
+    @Test
+    void exposesTotalFilesInProgressResponse() throws Exception {
+        UploadTaskProgress progress = UploadTaskProgress.processing("upload-1", "dataset.zip");
+        progress.setTotalFiles(10);
+        progress.recordInserted();
+        when(uploadService.progress("upload-1")).thenReturn(UploadProgressResponse.from(progress));
+
+        mockMvc.perform(get("/api/picture-zip/uploads/upload-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalFiles").value(10))
+                .andExpect(jsonPath("$.processedFiles").value(1));
+    }
 }

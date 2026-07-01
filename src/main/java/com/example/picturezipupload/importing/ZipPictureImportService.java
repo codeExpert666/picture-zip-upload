@@ -7,6 +7,7 @@ import com.example.picturezipupload.progress.UploadProgressStore;
 import com.example.picturezipupload.repository.PictureRecordRepository;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Enumeration;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
@@ -74,9 +76,10 @@ public class ZipPictureImportService {
         UploadTaskProgress progress = progressStore.get(uploadId)
                 .orElseGet(() -> UploadTaskProgress.processing(uploadId, originalZipName));
         progress.markProcessing();
-        progressStore.save(progress);
 
         try {
+            progress.setTotalFiles(countNonDirectoryEntries(zipFile));
+            progressStore.save(progress);
             Files.createDirectories(properties.imagesPath());
             Files.createDirectories(properties.tempPath());
             try (InputStream fileInput = new BufferedInputStream(Files.newInputStream(zipFile));
@@ -98,6 +101,26 @@ public class ZipPictureImportService {
             progressStore.save(progress);
             throw new IllegalStateException("压缩包导入失败: " + zipFile, ex);
         }
+    }
+
+    /**
+     * 从 zip 中央目录统计需要进入导入循环的文件条目总数，供前端计算后台导入百分比。
+     */
+    private static long countNonDirectoryEntries(Path zipFile) throws IOException {
+        long totalFiles = 0;
+        try (ZipFile zip = ZipFile.builder()
+                .setPath(zipFile)
+                .setCharset(StandardCharsets.UTF_8)
+                .setUseUnicodeExtraFields(true)
+                .get()) {
+            Enumeration<ZipArchiveEntry> entries = zip.getEntries();
+            while (entries.hasMoreElements()) {
+                if (!entries.nextElement().isDirectory()) {
+                    totalFiles++;
+                }
+            }
+        }
+        return totalFiles;
     }
 
     /**

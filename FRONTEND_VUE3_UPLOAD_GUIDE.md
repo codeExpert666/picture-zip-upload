@@ -124,6 +124,7 @@ GET /api/picture-zip/uploads/{uploadId}
   "status": "PROCESSING",
   "totalChunks": 1024,
   "uploadedChunks": 1024,
+  "totalFiles": 14000,
   "processedFiles": 12000,
   "inserted": 10000,
   "duplicated": 1800,
@@ -150,9 +151,9 @@ GET /api/picture-zip/uploads/{uploadId}
 建议前端分为两个进度阶段：
 
 1. **本地上传阶段**：根据每个分片的 `onUploadProgress` 计算上传百分比。
-2. **后台处理阶段**：调用 `complete` 后轮询后端进度，展示 `processedFiles`、`inserted`、`duplicated`、`failed`。
+2. **后台处理阶段**：调用 `complete` 后轮询后端进度，用 `processedFiles / totalFiles` 展示导入百分比，同时展示 `inserted`、`duplicated`、`failed`。
 
-当前后端不会提前统计 zip 内图片总数，因此后台处理阶段不建议展示百分比，而是展示“已处理 N 张”。
+`totalFiles` 表示 zip 内非目录条目总数；目录不参与导入进度，根目录外文件、非图片扩展名和图片魔数不匹配的条目会计入 `failed`，同时也会推进 `processedFiles`。
 
 推荐参数：
 
@@ -274,6 +275,17 @@ const uploadPercent = computed(() => {
   }
 
   return Math.min(100, Math.floor((uploaded / file.value.size) * 100))
+})
+
+const importPercent = computed(() => {
+  if (!serverProgress.value?.totalFiles) {
+    return 0
+  }
+
+  return Math.min(
+    100,
+    Math.floor((serverProgress.value.processedFiles / serverProgress.value.totalFiles) * 100)
+  )
 })
 
 function handleFileChange(event) {
@@ -407,7 +419,9 @@ onBeforeUnmount(stopPolling)
 
     <div v-if="serverProgress" class="upload-panel">
       <p>任务状态：{{ serverProgress.status }}</p>
-      <p>已处理图片：{{ serverProgress.processedFiles }}</p>
+      <p>导入进度：{{ importPercent }}%</p>
+      <progress :value="importPercent" max="100" />
+      <p>已处理图片：{{ serverProgress.processedFiles }} / {{ serverProgress.totalFiles }}</p>
       <p>新增图片：{{ serverProgress.inserted }}</p>
       <p>重复图片：{{ serverProgress.duplicated }}</p>
       <p>失败条目：{{ serverProgress.failed }}</p>
@@ -441,16 +455,17 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 - 本地内存进度模式不适合服务重启后的恢复；生产多实例或需要跨重启恢复时应启用 Redis 进度存储。
 - 用户主动取消时先停止本地分片队列，再调用 `DELETE /api/picture-zip/uploads/{uploadId}` 清理服务端分片；取消成功后应清空本地保存的 `uploadId`。
 
-### 5.3 后台导入阶段不展示百分比
+### 5.3 后台导入百分比以 `totalFiles` 为分母
 
-当前后端没有返回 zip 内总图片数，只返回：
+后台进度接口返回：
 
+- `totalFiles`
 - `processedFiles`
 - `inserted`
 - `duplicated`
 - `failed`
 
-因此后台处理阶段建议展示计数，不展示百分比。
+前端可以用 `processedFiles / totalFiles` 展示后台导入百分比。`totalFiles` 为 `0` 时不计算百分比，前端应展示处理中或无可导入文件状态，避免除以 `0`。
 
 ### 5.4 失败处理
 
@@ -463,5 +478,4 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 
 如果产品需要更完整的大文件体验，建议后端后续补充：
 
-1. 后台导入 `totalFiles`，用于展示导入百分比。
-2. WebSocket 或 SSE 推送进度，替代轮询。
+1. WebSocket 或 SSE 推送进度，替代轮询。

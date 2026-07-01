@@ -49,10 +49,44 @@ class ZipPictureImportServiceTest {
                 .count()).isEqualTo(1);
 
         UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
+        assertThat(progress.getTotalFiles()).isEqualTo(2);
         assertThat(progress.getProcessedFiles()).isEqualTo(2);
         assertThat(progress.getInserted()).isEqualTo(1);
         assertThat(progress.getDuplicated()).isEqualTo(1);
         assertThat(progress.getFailed()).isZero();
+    }
+
+    @Test
+    void countsNonDirectoryEntriesBeforeImportingFiles() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        properties.setPublicUrlPrefix("/api/pictures/files");
+        InMemoryPictureRecordRepository repository = new InMemoryPictureRecordRepository();
+        InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
+        ZipPictureImportService service = new ZipPictureImportService(properties, repository, progressStore);
+        Path zip = tempDir.resolve("upload-with-invalid-files.zip");
+
+        try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(zip))) {
+            output.putNextEntry(new ZipEntry("folder/"));
+            output.closeEntry();
+            output.putNextEntry(new ZipEntry("valid.png"));
+            output.write(tinyPng());
+            output.closeEntry();
+            output.putNextEntry(new ZipEntry("folder/nested.png"));
+            output.write(tinyPng());
+            output.closeEntry();
+            output.putNextEntry(new ZipEntry("notes.txt"));
+            output.write("plain text".getBytes());
+            output.closeEntry();
+        }
+
+        service.importZip("upload-2", "dataset.zip", zip);
+
+        UploadTaskProgress progress = progressStore.get("upload-2").orElseThrow();
+        assertThat(progress.getTotalFiles()).isEqualTo(3);
+        assertThat(progress.getProcessedFiles()).isEqualTo(3);
+        assertThat(progress.getInserted()).isEqualTo(1);
+        assertThat(progress.getFailed()).isEqualTo(2);
     }
 
     private static void createZip(Path zip, ZipImage... images) throws IOException {

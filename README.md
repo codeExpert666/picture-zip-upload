@@ -12,7 +12,7 @@
 - 按图片内容 `SHA-256` 判重，图片名不同但内容相同只保留一份物理文件。
 - 新图片插入 `corpus_analysis_picture`，默认 `status = MARK`。
 - 重复图片不重复存储，不新增记录，只更新 `filename`、`extname`、`update_time`、`upload_id`、`original_zip_name`。
-- Redis 或内存记录上传进度。
+- Redis 或内存记录上传与后台导入进度，包含导入总文件数 `totalFiles`。
 - 通过 `/api/pictures/files/**` 提供图片访问。
 
 ## 接口
@@ -79,6 +79,26 @@ POST /api/picture-zip/uploads/{uploadId}/complete
 ```http
 GET /api/picture-zip/uploads/{uploadId}
 ```
+
+```json
+{
+  "uploadId": "uuid",
+  "originalFilename": "dataset.zip",
+  "status": "PROCESSING",
+  "totalChunks": 1024,
+  "uploadedChunks": 1024,
+  "totalFiles": 14000,
+  "processedFiles": 12000,
+  "inserted": 10000,
+  "duplicated": 1800,
+  "failed": 200,
+  "message": null,
+  "createdAt": "2026-07-01T11:00:00",
+  "updatedAt": "2026-07-01T11:10:00"
+}
+```
+
+后台导入百分比可用 `processedFiles / totalFiles` 计算；`totalFiles` 统计 zip 内非目录条目，目录不参与导入进度。
 
 ## 存储目录
 
