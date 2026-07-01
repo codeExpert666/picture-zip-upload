@@ -95,8 +95,28 @@ public class PictureZipUploadService {
         return UploadedChunksResponse.from(progress, uploadedChunkIndexes);
     }
 
+    /**
+     * 取消尚未进入合并或导入阶段的上传任务，并清理已落盘分片。
+     */
+    public void cancelUpload(String uploadId) throws IOException {
+        UploadTaskProgress progress = loadProgress(uploadId);
+        ensureCancelable(progress);
+        storageService.deleteChunks(uploadId);
+        progressStore.delete(uploadId);
+    }
+
     private UploadTaskProgress loadProgress(String uploadId) {
         return progressStore.get(uploadId)
                 .orElseThrow(() -> new IllegalArgumentException("上传任务不存在: " + uploadId));
+    }
+
+    private static void ensureCancelable(UploadTaskProgress progress) {
+        switch (progress.getStatus()) {
+            case CREATED, UPLOADING, FAILED -> {
+                return;
+            }
+            case MERGING, PROCESSING, DONE ->
+                    throw new IllegalArgumentException("上传任务当前状态不能取消: " + progress.getStatus());
+        }
     }
 }

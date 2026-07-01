@@ -82,7 +82,26 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 - 后端会忽略上传中断遗留的临时分片文件。
 - `complete` 合并后会清理分片目录，此接口主要用于任务进入合并前的恢复；若 `status` 已是 `MERGING`、`PROCESSING`、`DONE` 或 `FAILED`，前端不应继续补传分片。
 
-### 1.4 完成上传
+### 1.4 取消未完成上传任务
+
+```http
+DELETE /api/picture-zip/uploads/{uploadId}
+```
+
+成功响应：
+
+```http
+204 No Content
+```
+
+说明：
+
+- 用于用户主动取消或前端确认废弃一次未完成上传时清理服务端分片。
+- 后端会删除 `chunks/{uploadId}` 目录和任务进度记录；取消后再查询该 `uploadId` 会返回任务不存在。
+- 仅支持取消 `CREATED`、`UPLOADING`、`FAILED` 状态的任务。
+- 若任务已进入 `MERGING`、`PROCESSING` 或 `DONE`，后端返回 `400`，前端应停止调用取消接口并改为展示当前任务进度。
+
+### 1.5 完成上传
 
 ```http
 POST /api/picture-zip/uploads/{uploadId}/complete
@@ -90,7 +109,7 @@ POST /api/picture-zip/uploads/{uploadId}/complete
 
 调用后，后端会合并分片并异步导入 zip。
 
-### 1.5 查询任务进度
+### 1.6 查询任务进度
 
 ```http
 GET /api/picture-zip/uploads/{uploadId}
@@ -205,6 +224,10 @@ export function getUploadedChunks(uploadId) {
     .then(res => res.data)
 }
 
+export function cancelUploadTask(uploadId) {
+  return request.delete(`/picture-zip/uploads/${uploadId}`)
+}
+
 export function getUploadProgress(uploadId) {
   return request.get(`/picture-zip/uploads/${uploadId}`)
     .then(res => res.data)
@@ -222,6 +245,7 @@ import {
   createUploadTask,
   uploadChunk,
   completeUpload,
+  cancelUploadTask,
   getUploadedChunks,
   getUploadProgress
 } from '@/api/pictureZipUpload'
@@ -415,6 +439,7 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 - 恢复上传时，已上传分片的本地进度直接设置为该分片大小。
 - `uploadedChunks` 仅展示数量，是否跳过某个分片必须看 `uploadedChunkIndexes`。
 - 本地内存进度模式不适合服务重启后的恢复；生产多实例或需要跨重启恢复时应启用 Redis 进度存储。
+- 用户主动取消时先停止本地分片队列，再调用 `DELETE /api/picture-zip/uploads/{uploadId}` 清理服务端分片；取消成功后应清空本地保存的 `uploadId`。
 
 ### 5.3 后台导入阶段不展示百分比
 
@@ -438,6 +463,5 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 
 如果产品需要更完整的大文件体验，建议后端后续补充：
 
-1. 取消上传任务接口，用于清理未完成分片。
-2. 后台导入 `totalFiles`，用于展示导入百分比。
-3. WebSocket 或 SSE 推送进度，替代轮询。
+1. 后台导入 `totalFiles`，用于展示导入百分比。
+2. WebSocket 或 SSE 推送进度，替代轮询。

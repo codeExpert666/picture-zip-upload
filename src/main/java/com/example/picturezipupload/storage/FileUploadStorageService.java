@@ -93,6 +93,15 @@ public class FileUploadStorageService {
     }
 
     /**
+     * 删除指定上传任务的全部分片文件。
+     *
+     * <p>取消上传时会连同已完成分片、上传中断留下的临时文件和无关旁路文件一起清掉。</p>
+     */
+    public void deleteChunks(String uploadId) throws IOException {
+        deleteDirectoryIfExists(properties.chunksPath().resolve(uploadId));
+    }
+
+    /**
      * 按分片序号顺序合并 zip 文件。
      *
      * <p>任一分片缺失都会失败，避免生成不完整压缩包进入后台导入流程。</p>

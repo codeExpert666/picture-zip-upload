@@ -48,6 +48,11 @@ public class RedisUploadProgressStore implements UploadProgressStore {
         }
     }
 
+    @Override
+    public void delete(String uploadId) {
+        redisTemplate.delete(key(uploadId));
+    }
+
     private static String key(String uploadId) {
         return KEY_PREFIX + uploadId;
     }

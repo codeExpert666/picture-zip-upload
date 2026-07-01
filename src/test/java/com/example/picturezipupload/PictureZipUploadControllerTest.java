@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -95,5 +96,13 @@ class PictureZipUploadControllerTest {
                 any(InputStream.class),
                 eq("SHA-256"),
                 eq(checksum));
+    }
+
+    @Test
+    void cancelsUploadTask() throws Exception {
+        mockMvc.perform(delete("/api/picture-zip/uploads/upload-1"))
+                .andExpect(status().isNoContent());
+
+        verify(uploadService).cancelUpload("upload-1");
     }
 }

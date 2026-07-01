@@ -93,6 +93,39 @@ class PictureZipUploadServiceTest {
         assertThat(storageService.listUploadedChunkIndexes("upload-1")).isEmpty();
     }
 
+    @Test
+    void cancelsUnfinishedUploadByDeletingChunksAndProgress() throws Exception {
+        FileUploadStorageService storageService = storageService();
+        InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
+        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        storageService.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
+        storageService.saveChunk("upload-1", 2, new ByteArrayInputStream("two".getBytes()));
+
+        service.cancelUpload("upload-1");
+
+        assertThat(storageService.listUploadedChunkIndexes("upload-1")).isEmpty();
+        assertThat(progressStore.get("upload-1")).isEmpty();
+        assertThat(tempDir.resolve("chunks/upload-1")).doesNotExist();
+    }
+
+    @Test
+    void rejectsCancelAfterUploadStartsProcessing() throws Exception {
+        FileUploadStorageService storageService = storageService();
+        InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
+        UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
+        progress.markProcessing();
+        progressStore.save(progress);
+        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        storageService.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
+
+        assertThatThrownBy(() -> service.cancelUpload("upload-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("当前状态不能取消");
+
+        assertThat(storageService.listUploadedChunkIndexes("upload-1")).containsExactly(0);
+        assertThat(progressStore.get("upload-1")).isPresent();
+    }
+
     private FileUploadStorageService storageService() {
         PictureUploadProperties properties = new PictureUploadProperties();
         properties.setRootPath(tempDir);

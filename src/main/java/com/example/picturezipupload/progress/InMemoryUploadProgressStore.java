@@ -24,4 +24,9 @@ public class InMemoryUploadProgressStore implements UploadProgressStore {
     public Optional<UploadTaskProgress> get(String uploadId) {
         return Optional.ofNullable(progresses.get(uploadId));
     }
+
+    @Override
+    public void delete(String uploadId) {
+        progresses.remove(uploadId);
+    }
 }

@@ -6,6 +6,8 @@ import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.dto.UploadProgressResponse;
 import com.example.picturezipupload.service.PictureZipUploadService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -61,6 +64,15 @@ public class PictureZipUploadController {
     @GetMapping("/{uploadId}/chunks")
     public UploadedChunksResponse uploadedChunks(@PathVariable String uploadId) throws IOException {
         return uploadService.uploadedChunks(uploadId);
+    }
+
+    /**
+     * 取消未完成上传任务，并清理已落盘分片。
+     */
+    @DeleteMapping("/{uploadId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancel(@PathVariable String uploadId) throws IOException {
+        uploadService.cancelUpload(uploadId);
     }
 
     /**

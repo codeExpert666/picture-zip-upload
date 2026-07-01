@@ -20,4 +20,9 @@ public interface UploadProgressStore {
      * 查询任务进度。
      */
     Optional<UploadTaskProgress> get(String uploadId);
+
+    /**
+     * 删除任务进度。
+     */
+    void delete(String uploadId);
 }

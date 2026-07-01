@@ -60,6 +60,14 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 }
 ```
 
+取消未完成上传任务并清理分片：
+
+```http
+DELETE /api/picture-zip/uploads/{uploadId}
+```
+
+成功时返回 `204 No Content`。仅支持取消 `CREATED`、`UPLOADING`、`FAILED` 状态的任务；任务进入 `MERGING`、`PROCESSING`、`DONE` 后不能取消。取消成功后会删除 `chunks/{uploadId}` 目录和进度记录，再查询该 `uploadId` 会返回任务不存在。
+
 完成上传并开始后台导入：
 
 ```http

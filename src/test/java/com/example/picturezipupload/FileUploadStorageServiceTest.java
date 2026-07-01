@@ -49,6 +49,23 @@ class FileUploadStorageServiceTest {
     }
 
     @Test
+    void deletesChunkDirectoryForCanceledUpload() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        FileUploadStorageService service = new FileUploadStorageService(properties);
+
+        service.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
+        Path chunkDir = tempDir.resolve("chunks/upload-1");
+        Files.writeString(chunkDir.resolve("chunk-000001.part.tmp"), "partial");
+        Files.writeString(chunkDir.resolve("readme.txt"), "ignore");
+
+        service.deleteChunks("upload-1");
+
+        assertThat(chunkDir).doesNotExist();
+        assertThat(service.listUploadedChunkIndexes("upload-1")).isEmpty();
+    }
+
+    @Test
     void savesChunkWhenSha256ChecksumMatches() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
         properties.setRootPath(tempDir);
