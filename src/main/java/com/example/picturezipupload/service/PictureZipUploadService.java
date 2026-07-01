@@ -52,8 +52,16 @@ public class PictureZipUploadService {
      * 保存单个分片并更新已上传分片数。
      */
     public UploadProgressResponse uploadChunk(String uploadId, int chunkIndex, InputStream inputStream) throws IOException {
+        return uploadChunk(uploadId, chunkIndex, inputStream, null, null);
+    }
+
+    /**
+     * 保存单个分片，按需校验分片内容摘要，并更新已上传分片数。
+     */
+    public UploadProgressResponse uploadChunk(String uploadId, int chunkIndex, InputStream inputStream,
+                                              String checksumAlgorithm, String checksum) throws IOException {
         UploadTaskProgress progress = loadProgress(uploadId);
-        storageService.saveChunk(uploadId, chunkIndex, inputStream);
+        storageService.saveChunk(uploadId, chunkIndex, inputStream, checksumAlgorithm, checksum);
         progress.recordUploadedChunks(storageService.listUploadedChunkIndexes(uploadId).size());
         progressStore.save(progress);
         return UploadProgressResponse.from(progress);

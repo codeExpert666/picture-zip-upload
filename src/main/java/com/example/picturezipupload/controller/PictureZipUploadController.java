@@ -47,8 +47,12 @@ public class PictureZipUploadController {
     @PutMapping("/{uploadId}/chunks/{chunkIndex}")
     public UploadProgressResponse uploadChunk(@PathVariable String uploadId,
                                               @PathVariable int chunkIndex,
-                                              @RequestParam("file") MultipartFile file) throws IOException {
-        return uploadService.uploadChunk(uploadId, chunkIndex, file.getInputStream());
+                                              @RequestParam("file") MultipartFile file,
+                                              @RequestParam(value = "checksumAlgorithm", required = false)
+                                              String checksumAlgorithm,
+                                              @RequestParam(value = "checksum", required = false)
+                                              String checksum) throws IOException {
+        return uploadService.uploadChunk(uploadId, chunkIndex, file.getInputStream(), checksumAlgorithm, checksum);
     }
 
     /**

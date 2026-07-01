@@ -43,12 +43,17 @@ Content-Type: multipart/form-data
 
 ```text
 file=@chunk.bin
+checksumAlgorithm=SHA-256
+checksum=<当前分片 SHA-256 十六进制摘要>
 ```
 
 说明：
 
 - `chunkIndex` 从 `0` 开始。
 - 后端按分片序号顺序合并 zip。
+- `checksumAlgorithm` 支持 `MD5`、`SHA-256`；推荐前端使用浏览器原生支持的 `SHA-256`。
+- `checksumAlgorithm` 和 `checksum` 可同时省略以兼容旧客户端；如果只传其中一个，后端会返回 `400`。
+- 分片校验失败时后端返回 `400`，并删除本次临时分片，不覆盖同序号已成功上传的分片。
 - 当前后端默认单个 multipart 请求上限为 `128MB`，前端分片大小必须小于该值。
 
 ### 1.3 查询已上传分片列表
@@ -143,6 +148,7 @@ const POLLING_INTERVAL = 2000
 - `64MB` 小于后端默认 `128MB` multipart 限制。
 - 并发数控制在 `3`，避免浏览器和网关连接过多。
 - 轮询间隔 `2s` 能兼顾实时性和服务端压力。
+- `SHA-256` 可直接使用浏览器 Web Crypto API；如必须使用 `MD5`，前端需要引入可靠的 MD5 实现。
 
 ## 3. API 封装
 
@@ -163,9 +169,23 @@ export function createUploadTask({ originalFilename, totalChunks, totalSize }) {
   }).then(res => res.data)
 }
 
-export function uploadChunk(uploadId, chunkIndex, blob, onProgress) {
+const CHECKSUM_ALGORITHM = 'SHA-256'
+
+async function calculateChecksum(blob, algorithm = CHECKSUM_ALGORITHM) {
+  const buffer = await blob.arrayBuffer()
+  const hash = await crypto.subtle.digest(algorithm, buffer)
+
+  return Array.from(new Uint8Array(hash))
+    .map(value => value.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+export async function uploadChunk(uploadId, chunkIndex, blob, onProgress) {
+  const checksum = await calculateChecksum(blob)
   const formData = new FormData()
   formData.append('file', blob)
+  formData.append('checksumAlgorithm', CHECKSUM_ALGORITHM)
+  formData.append('checksum', checksum)
 
   return request.put(`/picture-zip/uploads/${uploadId}/chunks/${chunkIndex}`, formData, {
     headers: {
@@ -418,7 +438,6 @@ GET /api/picture-zip/uploads/{uploadId}/chunks
 
 如果产品需要更完整的大文件体验，建议后端后续补充：
 
-1. 分片 MD5 或 SHA-256 校验，避免传输损坏。
-2. 取消上传任务接口，用于清理未完成分片。
-3. 后台导入 `totalFiles`，用于展示导入百分比。
-4. WebSocket 或 SSE 推送进度，替代轮询。
+1. 取消上传任务接口，用于清理未完成分片。
+2. 后台导入 `totalFiles`，用于展示导入百分比。
+3. WebSocket 或 SSE 推送进度，替代轮询。

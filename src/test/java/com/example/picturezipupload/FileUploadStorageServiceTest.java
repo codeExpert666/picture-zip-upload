@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FileUploadStorageServiceTest {
 
@@ -43,5 +46,53 @@ class FileUploadStorageServiceTest {
         Files.writeString(tempDir.resolve("chunks/upload-1/readme.txt"), "ignore");
 
         assertThat(service.listUploadedChunkIndexes("upload-1")).containsExactly(0, 2);
+    }
+
+    @Test
+    void savesChunkWhenSha256ChecksumMatches() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        FileUploadStorageService service = new FileUploadStorageService(properties);
+
+        service.saveChunk(
+                "upload-1",
+                0,
+                new ByteArrayInputStream("hello".getBytes(StandardCharsets.UTF_8)),
+                "SHA-256",
+                hexDigest("SHA-256", "hello"));
+
+        Path merged = service.mergeChunks("upload-1", "images.zip", 1);
+        assertThat(Files.readString(merged)).isEqualTo("hello");
+    }
+
+    @Test
+    void rejectsMismatchedChecksumWithoutReplacingExistingChunk() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        FileUploadStorageService service = new FileUploadStorageService(properties);
+        service.saveChunk("upload-1", 0, new ByteArrayInputStream("original".getBytes(StandardCharsets.UTF_8)));
+
+        assertThatThrownBy(() -> service.saveChunk(
+                "upload-1",
+                0,
+                new ByteArrayInputStream("broken".getBytes(StandardCharsets.UTF_8)),
+                "MD5",
+                "00000000000000000000000000000000"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("分片校验失败");
+
+        assertThat(tempDir.resolve("chunks/upload-1/chunk-000000.part.tmp")).doesNotExist();
+        Path merged = service.mergeChunks("upload-1", "images.zip", 1);
+        assertThat(Files.readString(merged)).isEqualTo("original");
+    }
+
+    private static String hexDigest(String algorithm, String content) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
+        byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+        StringBuilder builder = new StringBuilder(hash.length * 2);
+        for (byte value : hash) {
+            builder.append(String.format("%02x", value));
+        }
+        return builder.toString();
     }
 }

@@ -11,9 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PictureZipUploadServiceTest {
 
@@ -52,6 +55,44 @@ class PictureZipUploadServiceTest {
         assertThat(progress.getStatus()).isEqualTo(UploadStatus.UPLOADING);
     }
 
+    @Test
+    void uploadsChunkWhenChecksumMatches() throws Exception {
+        FileUploadStorageService storageService = storageService();
+        InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
+        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+
+        service.uploadChunk(
+                "upload-1",
+                1,
+                new ByteArrayInputStream("chunk".getBytes(StandardCharsets.UTF_8)),
+                "SHA-256",
+                hexDigest("SHA-256", "chunk"));
+
+        UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
+        assertThat(progress.getUploadedChunks()).isEqualTo(1);
+        assertThat(storageService.listUploadedChunkIndexes("upload-1")).containsExactly(1);
+    }
+
+    @Test
+    void rejectsChunkWhenChecksumMismatches() throws Exception {
+        FileUploadStorageService storageService = storageService();
+        InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
+        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+
+        assertThatThrownBy(() -> service.uploadChunk(
+                "upload-1",
+                1,
+                new ByteArrayInputStream("chunk".getBytes(StandardCharsets.UTF_8)),
+                "MD5",
+                "00000000000000000000000000000000"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("分片校验失败");
+
+        UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
+        assertThat(progress.getUploadedChunks()).isZero();
+        assertThat(storageService.listUploadedChunkIndexes("upload-1")).isEmpty();
+    }
+
     private FileUploadStorageService storageService() {
         PictureUploadProperties properties = new PictureUploadProperties();
         properties.setRootPath(tempDir);
@@ -62,5 +103,15 @@ class PictureZipUploadServiceTest {
         InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
         progressStore.save(UploadTaskProgress.created(uploadId, originalFilename, totalChunks));
         return progressStore;
+    }
+
+    private static String hexDigest(String algorithm, String content) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
+        byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+        StringBuilder builder = new StringBuilder(hash.length * 2);
+        for (byte value : hash) {
+            builder.append(String.format("%02x", value));
+        }
+        return builder.toString();
     }
 }

@@ -5,6 +5,7 @@
 ## 能力范围
 
 - 分片上传大压缩包。
+- 支持分片 `MD5` 或 `SHA-256` 校验，避免传输损坏的分片落盘。
 - 服务端按分片序号合并 zip。
 - 后台异步、流式解压 zip，避免把压缩包或图片整体读入内存。
 - 只处理 zip 根目录下的图片文件。
@@ -36,7 +37,11 @@ PUT /api/picture-zip/uploads/{uploadId}/chunks/{chunkIndex}
 Content-Type: multipart/form-data
 
 file=@chunk.bin
+checksumAlgorithm=SHA-256
+checksum=<当前分片 SHA-256 十六进制摘要>
 ```
+
+`checksumAlgorithm` 和 `checksum` 可同时省略以兼容旧客户端；只要传其中一个，就必须两个都传。支持的算法为 `MD5`、`SHA-256`，校验值大小写不敏感。校验失败会返回 `400`，本次临时分片会被删除，已成功上传的同序号分片不会被覆盖。
 
 查询已上传分片列表，用于断点续传：
 

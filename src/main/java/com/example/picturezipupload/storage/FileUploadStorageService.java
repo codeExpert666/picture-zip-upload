@@ -12,7 +12,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,18 +43,32 @@ public class FileUploadStorageService {
      * <p>先写临时文件再原子移动到正式分片名，避免进程中断时留下半个正式分片。</p>
      */
     public void saveChunk(String uploadId, int chunkIndex, InputStream inputStream) throws IOException {
+        saveChunk(uploadId, chunkIndex, inputStream, null, null);
+    }
+
+    /**
+     * 保存一个分片，并在移动到正式分片名前校验内容摘要。
+     *
+     * <p>校验失败时只删除本次临时文件，不覆盖同序号已上传成功的分片，便于前端重试。</p>
+     */
+    public void saveChunk(String uploadId, int chunkIndex, InputStream inputStream, String checksumAlgorithm,
+                          String expectedChecksum) throws IOException {
         if (chunkIndex < 0) {
             throw new IllegalArgumentException("分片序号不能小于 0");
         }
+        DigestSpec digestSpec = resolveDigestSpec(checksumAlgorithm, expectedChecksum);
         Path chunkDir = properties.chunksPath().resolve(uploadId);
         Files.createDirectories(chunkDir);
 
         Path chunkPath = chunkPath(uploadId, chunkIndex);
         Path tempPath = chunkPath.resolveSibling(chunkPath.getFileName() + ".tmp");
-        try (InputStream input = new BufferedInputStream(inputStream)) {
-            Files.copy(input, tempPath, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            copyChunk(inputStream, tempPath, digestSpec);
+            Files.move(tempPath, chunkPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException | RuntimeException ex) {
+            deleteTempFile(tempPath, ex);
+            throw ex;
         }
-        Files.move(tempPath, chunkPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     /**
@@ -122,6 +140,86 @@ public class FileUploadStorageService {
         return Optional.of(Integer.parseInt(matcher.group(1)));
     }
 
+    private void copyChunk(InputStream inputStream, Path tempPath, DigestSpec digestSpec) throws IOException {
+        MessageDigest digest = digestSpec == null ? null : newDigest(digestSpec.algorithm());
+        byte[] buffer = new byte[properties.getIoBufferSize()];
+        try (InputStream input = new BufferedInputStream(inputStream);
+             OutputStream output = new BufferedOutputStream(Files.newOutputStream(
+                     tempPath,
+                     StandardOpenOption.CREATE,
+                     StandardOpenOption.TRUNCATE_EXISTING,
+                     StandardOpenOption.WRITE))) {
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                if (digest != null) {
+                    digest.update(buffer, 0, read);
+                }
+                output.write(buffer, 0, read);
+            }
+        }
+
+        if (digestSpec != null) {
+            String actualChecksum = HexFormat.of().formatHex(digest.digest());
+            if (!actualChecksum.equals(digestSpec.expectedChecksum())) {
+                throw new IllegalArgumentException("分片校验失败: 期望 " + digestSpec.expectedChecksum()
+                        + ", 实际 " + actualChecksum);
+            }
+        }
+    }
+
+    private static DigestSpec resolveDigestSpec(String checksumAlgorithm, String expectedChecksum) {
+        boolean hasAlgorithm = hasText(checksumAlgorithm);
+        boolean hasChecksum = hasText(expectedChecksum);
+        if (!hasAlgorithm && !hasChecksum) {
+            return null;
+        }
+        if (!hasAlgorithm || !hasChecksum) {
+            throw new IllegalArgumentException("分片校验算法和校验值必须同时提供");
+        }
+
+        String algorithm = normalizeAlgorithm(checksumAlgorithm);
+        String normalizedChecksum = expectedChecksum.trim().toLowerCase(Locale.ROOT);
+        int expectedLength = switch (algorithm) {
+            case "MD5" -> 32;
+            case "SHA-256" -> 64;
+            default -> throw new IllegalArgumentException("不支持的分片校验算法: " + checksumAlgorithm);
+        };
+        if (normalizedChecksum.length() != expectedLength || !normalizedChecksum.matches("[0-9a-f]+")) {
+            throw new IllegalArgumentException("分片校验值格式不正确");
+        }
+        return new DigestSpec(algorithm, normalizedChecksum);
+    }
+
+    private static String normalizeAlgorithm(String checksumAlgorithm) {
+        String normalized = checksumAlgorithm.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace("_", "-");
+        if ("SHA256".equals(normalized)) {
+            return "SHA-256";
+        }
+        return normalized;
+    }
+
+    private static MessageDigest newDigest(String algorithm) {
+        try {
+            return MessageDigest.getInstance(algorithm);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("JDK 不支持分片校验算法: " + algorithm, ex);
+        }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static void deleteTempFile(Path tempPath, Exception cause) {
+        try {
+            Files.deleteIfExists(tempPath);
+        } catch (IOException cleanupException) {
+            cause.addSuppressed(cleanupException);
+        }
+    }
+
     private static void deleteDirectoryIfExists(Path directory) throws IOException {
         if (!Files.exists(directory)) {
             return;
@@ -131,5 +229,8 @@ public class FileUploadStorageService {
                 Files.deleteIfExists(path);
             }
         }
+    }
+
+    private record DigestSpec(String algorithm, String expectedChecksum) {
     }
 }
