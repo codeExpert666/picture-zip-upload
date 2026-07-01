@@ -12,6 +12,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 本地文件系统上传存储服务。
@@ -20,6 +24,8 @@ import java.nio.file.StandardOpenOption;
  */
 @Service
 public class FileUploadStorageService {
+
+    private static final Pattern CHUNK_FILE_PATTERN = Pattern.compile("^chunk-(\\d{6})\\.part$");
 
     private final PictureUploadProperties properties;
 
@@ -45,6 +51,27 @@ public class FileUploadStorageService {
             Files.copy(input, tempPath, StandardCopyOption.REPLACE_EXISTING);
         }
         Files.move(tempPath, chunkPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    /**
+     * 查询指定任务已完整落盘的分片序号。
+     *
+     * <p>只统计正式分片文件，忽略上传中断遗留的 .tmp 文件，供前端刷新后断点续传。</p>
+     */
+    public List<Integer> listUploadedChunkIndexes(String uploadId) throws IOException {
+        Path chunkDir = properties.chunksPath().resolve(uploadId);
+        if (!Files.isDirectory(chunkDir)) {
+            return List.of();
+        }
+        try (var stream = Files.list(chunkDir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .map(FileUploadStorageService::parseChunkIndex)
+                    .flatMap(Optional::stream)
+                    .sorted()
+                    .toList();
+        }
     }
 
     /**
@@ -85,6 +112,14 @@ public class FileUploadStorageService {
      */
     private Path chunkPath(String uploadId, int chunkIndex) {
         return properties.chunksPath().resolve(uploadId).resolve(String.format("chunk-%06d.part", chunkIndex));
+    }
+
+    private static Optional<Integer> parseChunkIndex(String filename) {
+        Matcher matcher = CHUNK_FILE_PATTERN.matcher(filename);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+        return Optional.of(Integer.parseInt(matcher.group(1)));
     }
 
     private static void deleteDirectoryIfExists(Path directory) throws IOException {

@@ -30,4 +30,18 @@ class FileUploadStorageServiceTest {
         assertThat(Files.readString(merged)).isEqualTo("hello world");
         assertThat(merged).exists();
     }
+
+    @Test
+    void listsUploadedChunkIndexesInAscendingOrder() throws Exception {
+        PictureUploadProperties properties = new PictureUploadProperties();
+        properties.setRootPath(tempDir);
+        FileUploadStorageService service = new FileUploadStorageService(properties);
+
+        service.saveChunk("upload-1", 2, new ByteArrayInputStream("two".getBytes()));
+        service.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
+        Files.writeString(tempDir.resolve("chunks/upload-1/chunk-000001.part.tmp"), "partial");
+        Files.writeString(tempDir.resolve("chunks/upload-1/readme.txt"), "ignore");
+
+        assertThat(service.listUploadedChunkIndexes("upload-1")).containsExactly(0, 2);
+    }
 }

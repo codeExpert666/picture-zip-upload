@@ -38,6 +38,23 @@ Content-Type: multipart/form-data
 file=@chunk.bin
 ```
 
+查询已上传分片列表，用于断点续传：
+
+```http
+GET /api/picture-zip/uploads/{uploadId}/chunks
+```
+
+```json
+{
+  "uploadId": "uuid",
+  "originalFilename": "dataset.zip",
+  "status": "UPLOADING",
+  "totalChunks": 1024,
+  "uploadedChunks": 2,
+  "uploadedChunkIndexes": [0, 2]
+}
+```
+
 完成上传并开始后台导入：
 
 ```http

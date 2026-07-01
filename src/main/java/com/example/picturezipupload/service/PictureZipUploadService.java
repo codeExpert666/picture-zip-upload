@@ -3,6 +3,7 @@ package com.example.picturezipupload.service;
 import com.example.picturezipupload.domain.UploadTaskProgress;
 import com.example.picturezipupload.dto.CreateUploadRequest;
 import com.example.picturezipupload.dto.CreateUploadResponse;
+import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.dto.UploadProgressResponse;
 import com.example.picturezipupload.importing.ZipPictureImportService;
 import com.example.picturezipupload.progress.UploadProgressStore;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -52,7 +54,7 @@ public class PictureZipUploadService {
     public UploadProgressResponse uploadChunk(String uploadId, int chunkIndex, InputStream inputStream) throws IOException {
         UploadTaskProgress progress = loadProgress(uploadId);
         storageService.saveChunk(uploadId, chunkIndex, inputStream);
-        progress.recordChunkUploaded();
+        progress.recordUploadedChunks(storageService.listUploadedChunkIndexes(uploadId).size());
         progressStore.save(progress);
         return UploadProgressResponse.from(progress);
     }
@@ -74,6 +76,15 @@ public class PictureZipUploadService {
 
     public UploadProgressResponse progress(String uploadId) {
         return UploadProgressResponse.from(loadProgress(uploadId));
+    }
+
+    /**
+     * 查询已落盘分片序号，供前端断点续传时跳过已上传分片。
+     */
+    public UploadedChunksResponse uploadedChunks(String uploadId) throws IOException {
+        UploadTaskProgress progress = loadProgress(uploadId);
+        List<Integer> uploadedChunkIndexes = storageService.listUploadedChunkIndexes(uploadId);
+        return UploadedChunksResponse.from(progress, uploadedChunkIndexes);
     }
 
     private UploadTaskProgress loadProgress(String uploadId) {

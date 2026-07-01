@@ -78,6 +78,17 @@ public class UploadTaskProgress {
     }
 
     /**
+     * 按已落盘分片数量刷新上传进度，避免同一分片重试时重复计数。
+     */
+    public void recordUploadedChunks(int uploadedChunks) {
+        if (uploadedChunks < 0) {
+            throw new IllegalArgumentException("已上传分片数不能小于 0");
+        }
+        this.uploadedChunks = uploadedChunks;
+        markUploading();
+    }
+
+    /**
      * 记录一张新图片已入库。
      */
     public void recordInserted() {

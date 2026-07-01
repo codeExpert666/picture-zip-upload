@@ -2,6 +2,7 @@ package com.example.picturezipupload.controller;
 
 import com.example.picturezipupload.dto.CreateUploadRequest;
 import com.example.picturezipupload.dto.CreateUploadResponse;
+import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.dto.UploadProgressResponse;
 import com.example.picturezipupload.service.PictureZipUploadService;
 import jakarta.validation.Valid;
@@ -48,6 +49,14 @@ public class PictureZipUploadController {
                                               @PathVariable int chunkIndex,
                                               @RequestParam("file") MultipartFile file) throws IOException {
         return uploadService.uploadChunk(uploadId, chunkIndex, file.getInputStream());
+    }
+
+    /**
+     * 查询已上传分片列表，用于前端断点续传。
+     */
+    @GetMapping("/{uploadId}/chunks")
+    public UploadedChunksResponse uploadedChunks(@PathVariable String uploadId) throws IOException {
+        return uploadService.uploadedChunks(uploadId);
     }
 
     /**
