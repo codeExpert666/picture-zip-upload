@@ -15,16 +15,16 @@ public interface PictureRecordRepository {
     /**
      * 按内容 SHA-256 查询图片记录。
      */
-    Optional<PictureRecord> findByContentSha256(String contentSha256);
+    Optional<PictureRecord> findByContentSha256(String businessArea, String contentSha256);
 
     /**
      * 插入首次出现的图片记录。
      */
-    void insert(PictureRecord record);
+    void insert(String businessArea, PictureRecord record);
 
     /**
      * 更新重复导入图片的元数据，不改变图片标注状态。
      */
-    void updateDuplicateImport(String contentSha256, String filename, String extname,
-                               String uploadId, String originalZipName, LocalDateTime updateTime);
+    void updateDuplicateImport(String businessArea, String contentSha256, String filename, String extname,
+                               String uploadId, String originalZipName, String operator, LocalDateTime updateTime);
 }

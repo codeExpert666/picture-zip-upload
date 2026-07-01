@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * {@code corpus_analysis_picture} 表 MyBatis Mapper。
+ * 图片业务表 MyBatis Mapper。
  *
  * <p>表字段命名沿用存量库，其中 {@code file_URL} 通过别名映射到 Java 字段 {@code fileUrl}。</p>
  */
@@ -32,18 +32,20 @@ public interface CorpusAnalysisPictureMapper {
                 content_sha256 AS contentSha256,
                 file_size AS fileSize,
                 upload_id AS uploadId,
-                original_zip_name AS originalZipName
-            FROM corpus_analysis_picture
+                original_zip_name AS originalZipName,
+                operator
+            FROM ${tableName}
             WHERE content_sha256 = #{contentSha256}
             LIMIT 1
             """)
-    Optional<PictureRecord> findByContentSha256(@Param("contentSha256") String contentSha256);
+    Optional<PictureRecord> findByContentSha256(@Param("tableName") String tableName,
+                                                @Param("contentSha256") String contentSha256);
 
     /**
      * 插入首次导入的图片记录。
      */
     @Insert("""
-            INSERT INTO corpus_analysis_picture (
+            INSERT INTO ${tableName} (
                 voice_code,
                 filename,
                 extname,
@@ -55,23 +57,25 @@ public interface CorpusAnalysisPictureMapper {
                 content_sha256,
                 file_size,
                 upload_id,
-                original_zip_name
+                original_zip_name,
+                operator
             ) VALUES (
-                #{voiceCode},
-                #{filename},
-                #{extname},
-                #{fileUrl},
-                #{importTime},
-                #{updateTime},
-                #{filePath},
-                #{status},
-                #{contentSha256},
-                #{fileSize},
-                #{uploadId},
-                #{originalZipName}
+                #{record.voiceCode},
+                #{record.filename},
+                #{record.extname},
+                #{record.fileUrl},
+                #{record.importTime},
+                #{record.updateTime},
+                #{record.filePath},
+                #{record.status},
+                #{record.contentSha256},
+                #{record.fileSize},
+                #{record.uploadId},
+                #{record.originalZipName},
+                #{record.operator}
             )
             """)
-    void insert(PictureRecord record);
+    void insert(@Param("tableName") String tableName, @Param("record") PictureRecord record);
 
     /**
      * 记录重复图片的最新导入信息。
@@ -79,19 +83,22 @@ public interface CorpusAnalysisPictureMapper {
      * <p>这里刻意不更新状态、物理路径和首次导入时间，避免覆盖既有标注流程。</p>
      */
     @Update("""
-            UPDATE corpus_analysis_picture
+            UPDATE ${tableName}
             SET
                 filename = #{filename},
                 extname = #{extname},
                 update_time = #{updateTime},
                 upload_id = #{uploadId},
-                original_zip_name = #{originalZipName}
+                original_zip_name = #{originalZipName},
+                operator = #{operator}
             WHERE content_sha256 = #{contentSha256}
             """)
-    void updateDuplicateImport(@Param("contentSha256") String contentSha256,
+    void updateDuplicateImport(@Param("tableName") String tableName,
+                               @Param("contentSha256") String contentSha256,
                                @Param("filename") String filename,
                                @Param("extname") String extname,
                                @Param("uploadId") String uploadId,
                                @Param("originalZipName") String originalZipName,
+                               @Param("operator") String operator,
                                @Param("updateTime") LocalDateTime updateTime);
 }

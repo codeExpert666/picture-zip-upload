@@ -62,8 +62,9 @@ public class ZipPictureImportService {
      * 异步导入合并后的 zip 文件。
      */
     @Async("pictureImportExecutor")
-    public CompletableFuture<Void> importZipAsync(String uploadId, String originalZipName, Path zipFile) {
-        importZip(uploadId, originalZipName, zipFile);
+    public CompletableFuture<Void> importZipAsync(String uploadId, String originalZipName,
+                                                  String businessArea, String operator, Path zipFile) {
+        importZip(uploadId, originalZipName, businessArea, operator, zipFile);
         return CompletableFuture.completedFuture(null);
     }
 
@@ -72,9 +73,15 @@ public class ZipPictureImportService {
      *
      * <p>单个非法条目只计入失败数，不中断整个压缩包；zip 读取或存储异常才会使任务失败。</p>
      */
-    public void importZip(String uploadId, String originalZipName, Path zipFile) {
+    public void importZip(String uploadId, String originalZipName, String businessArea, String operator, Path zipFile) {
         UploadTaskProgress progress = progressStore.get(uploadId)
-                .orElseGet(() -> UploadTaskProgress.processing(uploadId, originalZipName));
+                .orElseGet(() -> UploadTaskProgress.processing(uploadId, originalZipName, businessArea, operator));
+        if (progress.getBusinessArea() == null) {
+            progress.setBusinessArea(businessArea);
+        }
+        if (progress.getOperator() == null) {
+            progress.setOperator(operator);
+        }
         progress.markProcessing();
 
         try {
@@ -90,7 +97,7 @@ public class ZipPictureImportService {
                     if (entry.isDirectory()) {
                         continue;
                     }
-                    importEntry(uploadId, originalZipName, zipInput, entry, progress);
+                    importEntry(uploadId, originalZipName, businessArea, operator, zipInput, entry, progress);
                     progressStore.save(progress);
                 }
             }
@@ -128,7 +135,7 @@ public class ZipPictureImportService {
      *
      * <p>重复图片只更新既有记录的导入元数据，不改变标注状态，也不覆盖原物理文件。</p>
      */
-    private void importEntry(String uploadId, String originalZipName, InputStream input,
+    private void importEntry(String uploadId, String originalZipName, String businessArea, String operator, InputStream input,
                              ZipArchiveEntry entry, UploadTaskProgress progress) throws IOException {
         String entryName = entry.getName();
         if (!ZipEntryNameValidator.isRootFile(entryName)) {
@@ -150,11 +157,11 @@ public class ZipPictureImportService {
 
         String normalizedExt = ImageTypeDetector.normalizeExt(extname);
         String filename = truncate(extractFilenameWithoutExt(entryName), 100);
-        Optional<PictureRecord> existing = repository.findByContentSha256(candidate.sha256());
+        Optional<PictureRecord> existing = repository.findByContentSha256(businessArea, candidate.sha256());
         if (existing.isPresent()) {
             Files.deleteIfExists(candidate.tempPath());
-            repository.updateDuplicateImport(candidate.sha256(), filename, normalizedExt,
-                    uploadId, originalZipName, LocalDateTime.now());
+            repository.updateDuplicateImport(businessArea, candidate.sha256(), filename, normalizedExt,
+                    uploadId, originalZipName, operator, LocalDateTime.now());
             progress.recordDuplicated();
             return;
         }
@@ -170,14 +177,15 @@ public class ZipPictureImportService {
                 candidate.fileSize(),
                 uploadId,
                 originalZipName,
+                operator,
                 LocalDateTime.now());
         try {
-            repository.insert(record);
+            repository.insert(businessArea, record);
             progress.recordInserted();
         } catch (DuplicateKeyException ex) {
             // 数据库唯一索引是并发判重的最终防线。
-            repository.updateDuplicateImport(candidate.sha256(), filename, normalizedExt,
-                    uploadId, originalZipName, LocalDateTime.now());
+            repository.updateDuplicateImport(businessArea, candidate.sha256(), filename, normalizedExt,
+                    uploadId, originalZipName, operator, LocalDateTime.now());
             progress.recordDuplicated();
         }
     }

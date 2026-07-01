@@ -1,5 +1,6 @@
 package com.example.picturezipupload.service;
 
+import com.example.picturezipupload.config.BusinessAreaTableResolver;
 import com.example.picturezipupload.domain.UploadTaskProgress;
 import com.example.picturezipupload.dto.CreateUploadRequest;
 import com.example.picturezipupload.dto.CreateUploadResponse;
@@ -27,23 +28,33 @@ public class PictureZipUploadService {
     private final FileUploadStorageService storageService;
     private final ZipPictureImportService importService;
     private final UploadProgressStore progressStore;
+    private final BusinessAreaTableResolver tableResolver;
 
     public PictureZipUploadService(FileUploadStorageService storageService, ZipPictureImportService importService,
-                                   UploadProgressStore progressStore) {
+                                   UploadProgressStore progressStore, BusinessAreaTableResolver tableResolver) {
         this.storageService = storageService;
         this.importService = importService;
         this.progressStore = progressStore;
+        this.tableResolver = tableResolver;
     }
 
     /**
      * 创建上传任务并初始化进度。
      */
     public CreateUploadResponse createUpload(CreateUploadRequest request) {
+        String businessArea = requireText(request.getBusinessArea(), "业务领域不能为空");
+        String operator = requireText(request.getOperator(), "上传责任人不能为空");
+        if (operator.length() > 50) {
+            throw new IllegalArgumentException("上传责任人不能超过 50 个字符");
+        }
+        tableResolver.resolve(businessArea);
         String uploadId = UUID.randomUUID().toString();
         UploadTaskProgress progress = UploadTaskProgress.created(
                 uploadId,
                 request.getOriginalFilename(),
-                request.getTotalChunks());
+                request.getTotalChunks(),
+                businessArea,
+                operator);
         progressStore.save(progress);
         return new CreateUploadResponse(uploadId, progress.getStatus());
     }
@@ -78,7 +89,12 @@ public class PictureZipUploadService {
         Path zipPath = storageService.mergeChunks(uploadId, progress.getOriginalFilename(), progress.getTotalChunks());
         progress.markProcessing();
         progressStore.save(progress);
-        importService.importZipAsync(uploadId, progress.getOriginalFilename(), zipPath);
+        importService.importZipAsync(
+                uploadId,
+                progress.getOriginalFilename(),
+                progress.getBusinessArea(),
+                progress.getOperator(),
+                zipPath);
         return UploadProgressResponse.from(progress);
     }
 
@@ -118,5 +134,12 @@ public class PictureZipUploadService {
             case MERGING, PROCESSING, DONE ->
                     throw new IllegalArgumentException("上传任务当前状态不能取消: " + progress.getStatus());
         }
+    }
+
+    private static String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
     }
 }

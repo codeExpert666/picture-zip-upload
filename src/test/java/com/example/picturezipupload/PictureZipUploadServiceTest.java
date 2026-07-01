@@ -1,8 +1,11 @@
 package com.example.picturezipupload;
 
 import com.example.picturezipupload.config.PictureUploadProperties;
+import com.example.picturezipupload.config.BusinessAreaTableResolver;
 import com.example.picturezipupload.domain.UploadStatus;
 import com.example.picturezipupload.domain.UploadTaskProgress;
+import com.example.picturezipupload.dto.CreateUploadRequest;
+import com.example.picturezipupload.dto.CreateUploadResponse;
 import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.progress.InMemoryUploadProgressStore;
 import com.example.picturezipupload.service.PictureZipUploadService;
@@ -14,6 +17,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,10 +28,42 @@ class PictureZipUploadServiceTest {
     Path tempDir;
 
     @Test
+    void createUploadStoresBusinessAreaAndOperatorForAsyncImport() {
+        InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
+        PictureZipUploadService service = new PictureZipUploadService(
+                storageService(),
+                null,
+                progressStore,
+                tableResolver());
+        CreateUploadRequest request = createRequest("medical", "alice");
+
+        CreateUploadResponse response = service.createUpload(request);
+
+        UploadTaskProgress progress = progressStore.get(response.uploadId()).orElseThrow();
+        assertThat(progress.getBusinessArea()).isEqualTo("medical");
+        assertThat(progress.getOperator()).isEqualTo("alice");
+    }
+
+    @Test
+    void createUploadRejectsUnknownBusinessAreaBeforeReceivingChunks() {
+        InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
+        PictureZipUploadService service = new PictureZipUploadService(
+                storageService(),
+                null,
+                progressStore,
+                tableResolver());
+        CreateUploadRequest request = createRequest("unknown", "alice");
+
+        assertThatThrownBy(() -> service.createUpload(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("不支持的业务领域");
+    }
+
+    @Test
     void returnsUploadedChunkIndexesForResume() throws Exception {
         FileUploadStorageService storageService = storageService();
         InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
         storageService.saveChunk("upload-1", 2, new ByteArrayInputStream("two".getBytes()));
         storageService.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
 
@@ -45,7 +81,7 @@ class PictureZipUploadServiceTest {
     void keepsUploadedChunkCountDistinctWhenRetryingSameChunk() throws Exception {
         FileUploadStorageService storageService = storageService();
         InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
 
         service.uploadChunk("upload-1", 1, new ByteArrayInputStream("first".getBytes()));
         service.uploadChunk("upload-1", 1, new ByteArrayInputStream("retry".getBytes()));
@@ -59,7 +95,7 @@ class PictureZipUploadServiceTest {
     void uploadsChunkWhenChecksumMatches() throws Exception {
         FileUploadStorageService storageService = storageService();
         InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
 
         service.uploadChunk(
                 "upload-1",
@@ -77,7 +113,7 @@ class PictureZipUploadServiceTest {
     void rejectsChunkWhenChecksumMismatches() throws Exception {
         FileUploadStorageService storageService = storageService();
         InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
 
         assertThatThrownBy(() -> service.uploadChunk(
                 "upload-1",
@@ -97,7 +133,7 @@ class PictureZipUploadServiceTest {
     void cancelsUnfinishedUploadByDeletingChunksAndProgress() throws Exception {
         FileUploadStorageService storageService = storageService();
         InMemoryUploadProgressStore progressStore = progressStore("upload-1", "dataset.zip", 4);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
         storageService.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
         storageService.saveChunk("upload-1", 2, new ByteArrayInputStream("two".getBytes()));
 
@@ -115,7 +151,7 @@ class PictureZipUploadServiceTest {
         UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
         progress.markProcessing();
         progressStore.save(progress);
-        PictureZipUploadService service = new PictureZipUploadService(storageService, null, progressStore);
+        PictureZipUploadService service = uploadService(storageService, progressStore);
         storageService.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
 
         assertThatThrownBy(() -> service.cancelUpload("upload-1"))
@@ -130,6 +166,25 @@ class PictureZipUploadServiceTest {
         PictureUploadProperties properties = new PictureUploadProperties();
         properties.setRootPath(tempDir);
         return new FileUploadStorageService(properties);
+    }
+
+    private PictureZipUploadService uploadService(FileUploadStorageService storageService,
+                                                  InMemoryUploadProgressStore progressStore) {
+        return new PictureZipUploadService(storageService, null, progressStore, tableResolver());
+    }
+
+    private static BusinessAreaTableResolver tableResolver() {
+        return new BusinessAreaTableResolver(Map.of("medical", "medical_corpus_analysis_picture"));
+    }
+
+    private static CreateUploadRequest createRequest(String businessArea, String operator) {
+        CreateUploadRequest request = new CreateUploadRequest();
+        request.setOriginalFilename("dataset.zip");
+        request.setTotalChunks(4);
+        request.setTotalSize(1024);
+        request.setBusinessArea(businessArea);
+        request.setOperator(operator);
+        return request;
     }
 
     private static InMemoryUploadProgressStore progressStore(String uploadId, String originalFilename, int totalChunks) {

@@ -4,6 +4,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 图片上传模块配置。
@@ -47,6 +49,11 @@ public class PictureUploadProperties {
      * 文件复制和解压时使用的缓冲区大小，默认 1MB，避免单次读写占用过多堆内存。
      */
     private int ioBufferSize = 1024 * 1024;
+
+    /**
+     * 业务领域到图片表名的白名单映射。
+     */
+    private Map<String, String> businessAreaTables = new LinkedHashMap<>();
 
     public Path getRootPath() {
         return rootPath;
@@ -102,6 +109,14 @@ public class PictureUploadProperties {
 
     public void setIoBufferSize(int ioBufferSize) {
         this.ioBufferSize = ioBufferSize;
+    }
+
+    public Map<String, String> getBusinessAreaTables() {
+        return businessAreaTables;
+    }
+
+    public void setBusinessAreaTables(Map<String, String> businessAreaTables) {
+        this.businessAreaTables = businessAreaTables == null ? new LinkedHashMap<>() : new LinkedHashMap<>(businessAreaTables);
     }
 
     public Path chunksPath() {

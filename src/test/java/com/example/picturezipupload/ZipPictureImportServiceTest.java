@@ -40,10 +40,14 @@ class ZipPictureImportServiceTest {
                 new ZipImage("first.png", tinyPng()),
                 new ZipImage("renamed.png", tinyPng()));
 
-        service.importZip("upload-1", "dataset.zip", zip);
+        service.importZip("upload-1", "dataset.zip", "medical", "alice", zip);
 
         assertThat(repository.inserted).hasSize(1);
         assertThat(repository.duplicateUpdates).hasSize(1);
+        assertThat(repository.insertBusinessAreas).containsExactly("medical");
+        assertThat(repository.inserted.get(0).getOperator()).isEqualTo("alice");
+        assertThat(repository.duplicateUpdates.get(0).businessArea()).isEqualTo("medical");
+        assertThat(repository.duplicateUpdates.get(0).operator()).isEqualTo("alice");
         assertThat(Files.walk(tempDir.resolve("images"))
                 .filter(Files::isRegularFile)
                 .count()).isEqualTo(1);
@@ -80,7 +84,7 @@ class ZipPictureImportServiceTest {
             output.closeEntry();
         }
 
-        service.importZip("upload-2", "dataset.zip", zip);
+        service.importZip("upload-2", "dataset.zip", "medical", "alice", zip);
 
         UploadTaskProgress progress = progressStore.get("upload-2").orElseThrow();
         assertThat(progress.getTotalFiles()).isEqualTo(3);
@@ -112,24 +116,31 @@ class ZipPictureImportServiceTest {
 
     private static final class InMemoryPictureRecordRepository implements PictureRecordRepository {
         private final List<PictureRecord> inserted = new ArrayList<>();
-        private final List<PictureRecord> duplicateUpdates = new ArrayList<>();
+        private final List<String> insertBusinessAreas = new ArrayList<>();
+        private final List<DuplicateUpdate> duplicateUpdates = new ArrayList<>();
 
         @Override
-        public Optional<PictureRecord> findByContentSha256(String contentSha256) {
+        public Optional<PictureRecord> findByContentSha256(String businessArea, String contentSha256) {
             return inserted.stream()
                     .filter(record -> record.getContentSha256().equals(contentSha256))
                     .findFirst();
         }
 
         @Override
-        public void insert(PictureRecord record) {
+        public void insert(String businessArea, PictureRecord record) {
+            insertBusinessAreas.add(businessArea);
             inserted.add(record);
         }
 
         @Override
-        public void updateDuplicateImport(String contentSha256, String filename, String extname,
-                                          String uploadId, String originalZipName, LocalDateTime updateTime) {
-            findByContentSha256(contentSha256).ifPresent(duplicateUpdates::add);
+        public void updateDuplicateImport(String businessArea, String contentSha256, String filename, String extname,
+                                          String uploadId, String originalZipName, String operator,
+                                          LocalDateTime updateTime) {
+            duplicateUpdates.add(new DuplicateUpdate(businessArea, contentSha256, operator));
+            findByContentSha256(businessArea, contentSha256).ifPresent(record -> record.setOperator(operator));
         }
+    }
+
+    private record DuplicateUpdate(String businessArea, String contentSha256, String operator) {
     }
 }

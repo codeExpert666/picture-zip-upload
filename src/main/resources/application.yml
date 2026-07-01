@@ -29,6 +29,9 @@ picture-upload:
   public-url-prefix: /api/pictures/files
   # 本地样例默认使用内存进度；公司环境可改为 redis。
   progress-store: ${PICTURE_UPLOAD_PROGRESS_STORE:memory}
+  # 业务领域到物理图片表名的白名单映射，不能直接信任前端传入的表名。
+  business-area-tables:
+    medical: medical_corpus_analysis_picture
   import-core-pool-size: 2
   import-max-pool-size: 4
   import-queue-capacity: 64

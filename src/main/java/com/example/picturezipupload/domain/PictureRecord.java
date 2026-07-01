@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * {@code corpus_analysis_picture} 表对应的图片记录。
+ * 各业务领域图片表对应的图片记录。
  *
  * <p>原表的主键仍使用 {@code voice_code}，内容判重由 {@code contentSha256} 承担。</p>
  */
@@ -22,6 +22,7 @@ public class PictureRecord {
     private long fileSize;
     private String uploadId;
     private String originalZipName;
+    private String operator;
 
     /**
      * 创建一条首次导入的新图片记录。
@@ -30,7 +31,7 @@ public class PictureRecord {
      */
     public static PictureRecord imported(String filename, String extname, String fileUrl, String filePath,
                                          String contentSha256, long fileSize, String uploadId,
-                                         String originalZipName, LocalDateTime now) {
+                                         String originalZipName, String operator, LocalDateTime now) {
         PictureRecord record = new PictureRecord();
         record.setVoiceCode(UUID.randomUUID().toString());
         record.setFilename(filename);
@@ -44,6 +45,7 @@ public class PictureRecord {
         record.setFileSize(fileSize);
         record.setUploadId(uploadId);
         record.setOriginalZipName(originalZipName);
+        record.setOperator(operator);
         return record;
     }
 
@@ -141,5 +143,13 @@ public class PictureRecord {
 
     public void setOriginalZipName(String originalZipName) {
         this.originalZipName = originalZipName;
+    }
+
+    public String getOperator() {
+        return operator;
+    }
+
+    public void setOperator(String operator) {
+        this.operator = operator;
     }
 }

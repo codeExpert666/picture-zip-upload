@@ -10,8 +10,8 @@
 - 后台异步、流式解压 zip，避免把压缩包或图片整体读入内存。
 - 只处理 zip 根目录下的图片文件。
 - 按图片内容 `SHA-256` 判重，图片名不同但内容相同只保留一份物理文件。
-- 新图片插入 `corpus_analysis_picture`，默认 `status = MARK`。
-- 重复图片不重复存储，不新增记录，只更新 `filename`、`extname`、`update_time`、`upload_id`、`original_zip_name`。
+- 新图片按 `businessArea` 写入对应的 `xxx_corpus_analysis_picture`，默认 `status = MARK`。
+- 重复图片不重复存储，不新增记录，只更新 `filename`、`extname`、`update_time`、`upload_id`、`original_zip_name`、`operator`。
 - Redis 或内存记录上传与后台导入进度，包含导入总文件数 `totalFiles`。
 - 通过 `/api/pictures/files/**` 提供图片访问。
 
@@ -26,9 +26,13 @@ Content-Type: application/json
 {
   "originalFilename": "dataset.zip",
   "totalChunks": 1024,
-  "totalSize": 1099511627776
+  "totalSize": 1099511627776,
+  "businessArea": "medical",
+  "operator": "alice"
 }
 ```
+
+`businessArea` 必须是后端 `picture-upload.business-area-tables` 中配置过的业务领域编码；后端会用该编码解析物理表名。`operator` 表示最近一次上传责任人，新图插入和重复图更新都会写入该字段。
 
 上传分片：
 
@@ -126,7 +130,15 @@ export PICTURE_UPLOAD_ROOT=/data/picture-upload
 mysql -h127.0.0.1 -uroot -p ai_dataset < db/schema.sql
 ```
 
-`content_sha256` 是判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。
+每个业务领域一张图片表，表名由 `picture-upload.business-area-tables` 白名单配置控制，例如：
+
+```yaml
+picture-upload:
+  business-area-tables:
+    medical: medical_corpus_analysis_picture
+```
+
+`content_sha256` 是单张业务表内的判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。
 
 ## Redis 进度
 

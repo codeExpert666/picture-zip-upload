@@ -11,6 +11,8 @@ public class UploadTaskProgress {
 
     private String uploadId;
     private String originalFilename;
+    private String businessArea;
+    private String operator;
     private UploadStatus status;
     private int totalChunks;
     private int uploadedChunks;
@@ -27,10 +29,17 @@ public class UploadTaskProgress {
      * 创建一个等待上传分片的任务进度。
      */
     public static UploadTaskProgress created(String uploadId, String originalFilename, int totalChunks) {
+        return created(uploadId, originalFilename, totalChunks, null, null);
+    }
+
+    public static UploadTaskProgress created(String uploadId, String originalFilename, int totalChunks,
+                                             String businessArea, String operator) {
         LocalDateTime now = LocalDateTime.now();
         UploadTaskProgress progress = new UploadTaskProgress();
         progress.setUploadId(uploadId);
         progress.setOriginalFilename(originalFilename);
+        progress.setBusinessArea(businessArea);
+        progress.setOperator(operator);
         progress.setStatus(UploadStatus.CREATED);
         progress.setTotalChunks(totalChunks);
         progress.setCreatedAt(now);
@@ -39,7 +48,12 @@ public class UploadTaskProgress {
     }
 
     public static UploadTaskProgress processing(String uploadId, String originalFilename) {
-        UploadTaskProgress progress = created(uploadId, originalFilename, 0);
+        return processing(uploadId, originalFilename, null, null);
+    }
+
+    public static UploadTaskProgress processing(String uploadId, String originalFilename,
+                                                String businessArea, String operator) {
+        UploadTaskProgress progress = created(uploadId, originalFilename, 0, businessArea, operator);
         progress.markProcessing();
         return progress;
     }
@@ -134,6 +148,22 @@ public class UploadTaskProgress {
 
     public void setOriginalFilename(String originalFilename) {
         this.originalFilename = originalFilename;
+    }
+
+    public String getBusinessArea() {
+        return businessArea;
+    }
+
+    public void setBusinessArea(String businessArea) {
+        this.businessArea = businessArea;
+    }
+
+    public String getOperator() {
+        return operator;
+    }
+
+    public void setOperator(String operator) {
+        this.operator = operator;
     }
 
     public UploadStatus getStatus() {

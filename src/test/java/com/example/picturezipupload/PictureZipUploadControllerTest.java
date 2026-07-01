@@ -3,6 +3,8 @@ package com.example.picturezipupload;
 import com.example.picturezipupload.controller.PictureZipUploadController;
 import com.example.picturezipupload.domain.UploadStatus;
 import com.example.picturezipupload.domain.UploadTaskProgress;
+import com.example.picturezipupload.dto.CreateUploadRequest;
+import com.example.picturezipupload.dto.CreateUploadResponse;
 import com.example.picturezipupload.dto.UploadedChunksResponse;
 import com.example.picturezipupload.dto.UploadProgressResponse;
 import com.example.picturezipupload.service.PictureZipUploadService;
@@ -18,12 +20,16 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentCaptor.forClass;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,6 +43,32 @@ class PictureZipUploadControllerTest {
     void setUp() {
         uploadService = mock(PictureZipUploadService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(new PictureZipUploadController(uploadService)).build();
+    }
+
+    @Test
+    void bindsBusinessAreaAndOperatorWhenCreatingUpload() throws Exception {
+        when(uploadService.createUpload(any(CreateUploadRequest.class)))
+                .thenReturn(new CreateUploadResponse("upload-1", UploadStatus.CREATED));
+
+        mockMvc.perform(post("/api/picture-zip/uploads")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "originalFilename": "dataset.zip",
+                                  "totalChunks": 2,
+                                  "totalSize": 1024,
+                                  "businessArea": "medical",
+                                  "operator": "alice"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.uploadId").value("upload-1"))
+                .andExpect(jsonPath("$.status").value("CREATED"));
+
+        ArgumentCaptor<CreateUploadRequest> requestCaptor = forClass(CreateUploadRequest.class);
+        verify(uploadService).createUpload(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getBusinessArea()).isEqualTo("medical");
+        assertThat(requestCaptor.getValue().getOperator()).isEqualTo("alice");
     }
 
     @Test

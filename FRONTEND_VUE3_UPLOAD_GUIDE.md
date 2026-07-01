@@ -19,9 +19,16 @@ Content-Type: application/json
 {
   "originalFilename": "dataset.zip",
   "totalChunks": 1024,
-  "totalSize": 1099511627776
+  "totalSize": 1099511627776,
+  "businessArea": "medical",
+  "operator": "alice"
 }
 ```
+
+说明：
+
+- `businessArea` 传后端已配置的业务领域编码，后端会解析成对应的 `xxx_corpus_analysis_picture` 表名。
+- `operator` 表示最近一次上传责任人，新图插入和重复图更新都会写入表的 `operator` 字段。
 
 响应：
 
@@ -181,11 +188,13 @@ const request = axios.create({
   baseURL: '/api'
 })
 
-export function createUploadTask({ originalFilename, totalChunks, totalSize }) {
+export function createUploadTask({ originalFilename, totalChunks, totalSize, businessArea, operator }) {
   return request.post('/picture-zip/uploads', {
     originalFilename,
     totalChunks,
-    totalSize
+    totalSize,
+    businessArea,
+    operator
   }).then(res => res.data)
 }
 
@@ -256,6 +265,8 @@ const CONCURRENCY = 3
 const POLLING_INTERVAL = 2000
 
 const file = ref(null)
+const businessArea = ref('medical')
+const operator = ref('')
 const uploadId = ref('')
 const uploading = ref(false)
 const completing = ref(false)
@@ -344,6 +355,11 @@ async function startUpload() {
     return
   }
 
+  if (!businessArea.value.trim() || !operator.value.trim()) {
+    window.alert('请选择业务领域并填写上传责任人')
+    return
+  }
+
   uploading.value = true
 
   try {
@@ -352,7 +368,9 @@ async function startUpload() {
     const task = await createUploadTask({
       originalFilename: file.value.name,
       totalChunks: chunks.length,
-      totalSize: file.value.size
+      totalSize: file.value.size,
+      businessArea: businessArea.value.trim(),
+      operator: operator.value.trim()
     })
 
     uploadId.value = task.uploadId
@@ -404,9 +422,21 @@ onBeforeUnmount(stopPolling)
 
 <template>
   <section class="picture-upload">
+    <label>
+      业务领域
+      <select v-model="businessArea">
+        <option value="medical">medical</option>
+      </select>
+    </label>
+
+    <label>
+      上传责任人
+      <input v-model.trim="operator" maxlength="50">
+    </label>
+
     <input type="file" accept=".zip" @change="handleFileChange">
 
-    <button :disabled="!file || uploading || completing" @click="startUpload">
+    <button :disabled="!file || !operator.trim() || uploading || completing" @click="startUpload">
       {{ uploading ? '上传中' : completing ? '提交处理中' : '开始上传' }}
     </button>
 

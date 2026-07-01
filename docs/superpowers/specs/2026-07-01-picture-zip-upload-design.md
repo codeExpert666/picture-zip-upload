@@ -1,6 +1,6 @@
 # Picture Zip Upload Design
 
-**Goal:** Build a backend sample for uploading T-level image zip packages, streaming images to server storage, deduplicating by image content, and writing `corpus_analysis_picture` records.
+**Goal:** Build a backend sample for uploading T-level image zip packages, streaming images to server storage, deduplicating by image content, and writing business-area picture table records.
 
 **Architecture:** The API uses resumable chunk upload. The server persists chunks, merges them into one zip, and submits an asynchronous import task. The import task streams zip entries one by one, validates that each entry is a root-level image, computes SHA-256 while writing a temporary file, and uses `content_sha256` as the deduplication key.
 

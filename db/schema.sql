@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS corpus_analysis_picture (
+CREATE TABLE IF NOT EXISTS medical_corpus_analysis_picture (
     voice_code varchar(36) NOT NULL,
     filename varchar(100) DEFAULT NULL,
     extname varchar(10) DEFAULT NULL,
@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS corpus_analysis_picture (
     file_size bigint NOT NULL DEFAULT 0,
     upload_id varchar(36) DEFAULT NULL,
     original_zip_name varchar(255) DEFAULT NULL,
+    operator varchar(50) DEFAULT NULL,
     PRIMARY KEY (voice_code),
     UNIQUE KEY uk_picture_sha256 (content_sha256),
     KEY idx_picture_upload_id (upload_id),
