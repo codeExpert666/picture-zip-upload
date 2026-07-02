@@ -48,12 +48,33 @@ scripts/import-direct-picture-directory.sh
 
 ### 1. 备份业务表
 
-执行任何 DDL 或正式脚本前，先备份目标业务表。示例：
+执行任何 DDL 或正式脚本前，先备份目标业务表。
+
+macOS/Linux/Git Bash 示例：
 
 ```bash
-mysqldump -h127.0.0.1 -uroot -p ai_dataset medical_corpus_analysis_picture \
-  > medical_corpus_analysis_picture_$(date +%Y%m%d_%H%M%S).sql
+backup_file="medical_corpus_analysis_picture_$(date +%Y%m%d_%H%M%S).sql"
+mysqldump -h127.0.0.1 -uroot -p --default-character-set=utf8mb4 \
+  ai_dataset medical_corpus_analysis_picture \
+  --result-file="${backup_file}"
 ```
+
+Windows PowerShell 示例：
+
+```powershell
+$mysqldump = "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe"
+$backupFile = "medical_corpus_analysis_picture_$(Get-Date -Format 'yyyyMMdd_HHmmss').sql"
+& $mysqldump -h127.0.0.1 -uroot -p --default-character-set=utf8mb4 ai_dataset medical_corpus_analysis_picture --result-file="$backupFile"
+```
+
+Windows CMD 示例：
+
+```bat
+for /f %i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set BACKUP_FILE=medical_corpus_analysis_picture_%i.sql
+"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" -h127.0.0.1 -uroot -p --default-character-set=utf8mb4 ai_dataset medical_corpus_analysis_picture --result-file="%BACKUP_FILE%"
+```
+
+如果 `mysqldump` 已经加入 `PATH`，Windows 示例中的完整路径可以直接改成 `mysqldump`；如果实际安装目录不是 MySQL Server 8.0，按本机路径调整。CMD 示例如果写入 `.bat` 文件，`%i` 需要改成 `%%i`。PowerShell 下不要用 `mysqldump ... > backup.sql` 生成备份文件，避免导出的 SQL 文件编码不适合后续恢复。
 
 ### 2. 执行字段迁移
 

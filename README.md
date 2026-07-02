@@ -171,6 +171,8 @@ picture-upload:
 9. 正式执行新目录导入脚本。
 10. 抽样验证旧图、新图、中文路径 URL。
 
+Windows 本机备份时不要直接复制 Bash 示例，PowerShell/CMD 可执行命令见 `PICTURE_MAINTENANCE_SCRIPTS_GUIDE.md` 的“备份业务表”小节。
+
 旧记录回填优先使用表内 `file_path`，缺失时再用 `file_URL` 结合静态映射反推本地路径：
 
 ```bash
