@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.picturezipupload.mapper.CorpusAnalysisPictureMapper">
+
+    <sql id="PictureRecordColumns">
+        voice_code AS voiceCode,
+        filename,
+        extname,
+        file_URL AS fileUrl,
+        import_time AS importTime,
+        update_time AS updateTime,
+        file_path AS filePath,
+        status,
+        content_sha256 AS contentSha256,
+        file_size AS fileSize,
+        upload_id AS uploadId,
+        original_zip_name AS originalZipName,
+        operator
+    </sql>
+
+    <select id="findByContentSha256" resultType="com.example.picturezipupload.domain.PictureRecord">
+        SELECT
+            <include refid="PictureRecordColumns"/>
+        FROM ${tableName}
+        WHERE content_sha256 = #{contentSha256}
+        LIMIT 1
+    </select>
+
+    <insert id="insert">
+        INSERT INTO ${tableName} (
+            voice_code,
+            filename,
+            extname,
+            file_URL,
+            import_time,
+            update_time,
+            file_path,
+            status,
+            content_sha256,
+            file_size,
+            upload_id,
+            original_zip_name,
+            operator
+        ) VALUES (
+            #{record.voiceCode},
+            #{record.filename},
+            #{record.extname},
+            #{record.fileUrl},
+            #{record.importTime},
+            #{record.updateTime},
+            #{record.filePath},
+            #{record.status},
+            #{record.contentSha256},
+            #{record.fileSize},
+            #{record.uploadId},
+            #{record.originalZipName},
+            #{record.operator}
+        )
+    </insert>
+
+    <update id="updateDuplicateImport"
+            parameterType="com.example.picturezipupload.mapper.param.UpdateDuplicateImportParam">
+        UPDATE ${tableName}
+        SET
+            filename = #{filename},
+            extname = #{extname},
+            update_time = #{updateTime},
+            upload_id = #{uploadId},
+            original_zip_name = #{originalZipName},
+            operator = #{operator}
+        WHERE content_sha256 = #{contentSha256}
+    </update>
+
+    <select id="findRecordsMissingMetadata" resultType="com.example.picturezipupload.domain.PictureRecord">
+        SELECT
+            <include refid="PictureRecordColumns"/>
+        FROM ${tableName}
+        WHERE content_sha256 IS NULL
+           OR file_size IS NULL
+           OR file_size = 0
+        ORDER BY import_time ASC, voice_code ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateBackfillMetadata"
+            parameterType="com.example.picturezipupload.mapper.param.UpdateBackfillMetadataParam">
+        UPDATE ${tableName}
+        SET
+            content_sha256 = #{contentSha256},
+            file_size = #{fileSize},
+            upload_id = #{uploadId},
+            original_zip_name = #{originalZipName},
+            operator = #{operator},
+            update_time = #{updateTime}
+        WHERE voice_code = #{voiceCode}
+    </update>
+</mapper>
