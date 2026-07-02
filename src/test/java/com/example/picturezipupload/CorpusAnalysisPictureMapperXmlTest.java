@@ -3,11 +3,12 @@ package com.example.picturezipupload;
 import com.example.picturezipupload.domain.PictureRecord;
 import com.example.picturezipupload.domain.PictureStatus;
 import com.example.picturezipupload.mapper.CorpusAnalysisPictureMapper;
-import com.example.picturezipupload.mapper.param.UpdateBackfillMetadataParam;
-import com.example.picturezipupload.mapper.param.UpdateDuplicateImportParam;
+import com.example.picturezipupload.mapper.param.BackfillMetadataParam;
+import com.example.picturezipupload.mapper.param.DuplicateImportMetadataParam;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
@@ -41,6 +42,18 @@ class CorpusAnalysisPictureMapperXmlTest {
     }
 
     @Test
+    void updateMethodsKeepSearchCriteriaSeparateFromUpdatePayload() {
+        assertMapperUpdateMethodShape(
+                "updateDuplicateImport",
+                List.of("String", "String", "DuplicateImportMetadataParam"),
+                List.of("tableName", "contentSha256", "duplicateImportMetadata"));
+        assertMapperUpdateMethodShape(
+                "updateBackfillMetadata",
+                List.of("String", "String", "BackfillMetadataParam"),
+                List.of("tableName", "voiceCode", "backfillMetadata"));
+    }
+
+    @Test
     void executesAllXmlMapperStatements() throws Exception {
         try (SqlSession session = sqlSessionFactory().openSession(true)) {
             createSchema(session.getConnection());
@@ -54,7 +67,7 @@ class CorpusAnalysisPictureMapperXmlTest {
             assertThat(inserted.getVoiceCode()).isEqualTo("voice-1");
             assertThat(inserted.getFileUrl()).isEqualTo("/api/pictures/files/first.png");
 
-            mapper.updateDuplicateImport(duplicateImportParam(now.plusMinutes(1)));
+            mapper.updateDuplicateImport(TABLE_NAME, "hash-1", duplicateImportMetadata(now.plusMinutes(1)));
 
             PictureRecord duplicateUpdated = mapper.findByContentSha256(TABLE_NAME, "hash-1").orElseThrow();
             assertThat(duplicateUpdated.getFilename()).isEqualTo("updated.png");
@@ -69,7 +82,7 @@ class CorpusAnalysisPictureMapperXmlTest {
                     .extracting(PictureRecord::getVoiceCode)
                     .contains("voice-2");
 
-            mapper.updateBackfillMetadata(backfillMetadataParam(now.plusMinutes(3)));
+            mapper.updateBackfillMetadata(TABLE_NAME, "voice-2", backfillMetadata(now.plusMinutes(3)));
 
             PictureRecord backfilled = mapper.findByContentSha256(TABLE_NAME, "hash-2").orElseThrow();
             assertThat(backfilled.getFileSize()).isEqualTo(256L);
@@ -99,6 +112,22 @@ class CorpusAnalysisPictureMapperXmlTest {
         return new SqlSessionFactoryBuilder().build(configuration);
     }
 
+    private static void assertMapperUpdateMethodShape(String methodName, List<String> parameterTypeNames,
+                                                      List<String> paramAnnotationValues) {
+        Method method = Arrays.stream(CorpusAnalysisPictureMapper.class.getDeclaredMethods())
+                .filter(candidate -> candidate.getName().equals(methodName))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(method.getParameterTypes())
+                .extracting(Class::getSimpleName)
+                .containsExactlyElementsOf(parameterTypeNames);
+        assertThat(Arrays.stream(method.getParameters())
+                .map(parameter -> parameter.getAnnotation(Param.class).value())
+                .toList())
+                .containsExactlyElementsOf(paramAnnotationValues);
+    }
+
     private static void createSchema(Connection connection) throws Exception {
         try (Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS medical_corpus_analysis_picture");
@@ -122,10 +151,8 @@ class CorpusAnalysisPictureMapperXmlTest {
         }
     }
 
-    private static UpdateDuplicateImportParam duplicateImportParam(LocalDateTime updateTime) {
-        UpdateDuplicateImportParam param = new UpdateDuplicateImportParam();
-        param.setTableName(TABLE_NAME);
-        param.setContentSha256("hash-1");
+    private static DuplicateImportMetadataParam duplicateImportMetadata(LocalDateTime updateTime) {
+        DuplicateImportMetadataParam param = new DuplicateImportMetadataParam();
         param.setFilename("updated.png");
         param.setExtname("png");
         param.setUploadId("upload-2");
@@ -135,10 +162,8 @@ class CorpusAnalysisPictureMapperXmlTest {
         return param;
     }
 
-    private static UpdateBackfillMetadataParam backfillMetadataParam(LocalDateTime updateTime) {
-        UpdateBackfillMetadataParam param = new UpdateBackfillMetadataParam();
-        param.setTableName(TABLE_NAME);
-        param.setVoiceCode("voice-2");
+    private static BackfillMetadataParam backfillMetadata(LocalDateTime updateTime) {
+        BackfillMetadataParam param = new BackfillMetadataParam();
         param.setContentSha256("hash-2");
         param.setFileSize(256L);
         param.setUploadId("legacy-upload");

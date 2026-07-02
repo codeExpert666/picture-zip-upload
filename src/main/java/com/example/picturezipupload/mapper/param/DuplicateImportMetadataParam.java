@@ -3,34 +3,16 @@ package com.example.picturezipupload.mapper.param;
 import java.time.LocalDateTime;
 
 /**
- * 重复图片导入更新的 Mapper 参数对象。
+ * 重复图片导入时需要写回的最新导入信息。
  */
-public class UpdateDuplicateImportParam {
+public class DuplicateImportMetadataParam {
 
-    private String tableName;
-    private String contentSha256;
     private String filename;
     private String extname;
     private String uploadId;
     private String originalZipName;
     private String operator;
     private LocalDateTime updateTime;
-
-    public String getTableName() {
-        return tableName;
-    }
-
-    public void setTableName(String tableName) {
-        this.tableName = tableName;
-    }
-
-    public String getContentSha256() {
-        return contentSha256;
-    }
-
-    public void setContentSha256(String contentSha256) {
-        this.contentSha256 = contentSha256;
-    }
 
     public String getFilename() {
         return filename;

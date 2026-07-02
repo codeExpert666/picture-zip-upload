@@ -3,34 +3,16 @@ package com.example.picturezipupload.mapper.param;
 import java.time.LocalDateTime;
 
 /**
- * 历史图片元数据回填更新的 Mapper 参数对象。
+ * 历史图片记录回填时需要写入的元数据。
  */
-public class UpdateBackfillMetadataParam {
+public class BackfillMetadataParam {
 
-    private String tableName;
-    private String voiceCode;
     private String contentSha256;
     private long fileSize;
     private String uploadId;
     private String originalZipName;
     private String operator;
     private LocalDateTime updateTime;
-
-    public String getTableName() {
-        return tableName;
-    }
-
-    public void setTableName(String tableName) {
-        this.tableName = tableName;
-    }
-
-    public String getVoiceCode() {
-        return voiceCode;
-    }
-
-    public void setVoiceCode(String voiceCode) {
-        this.voiceCode = voiceCode;
-    }
 
     public String getContentSha256() {
         return contentSha256;

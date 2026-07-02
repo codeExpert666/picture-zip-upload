@@ -3,7 +3,7 @@ package com.example.picturezipupload.maintenance;
 import com.example.picturezipupload.config.BusinessAreaTableResolver;
 import com.example.picturezipupload.domain.PictureRecord;
 import com.example.picturezipupload.mapper.CorpusAnalysisPictureMapper;
-import com.example.picturezipupload.mapper.param.UpdateBackfillMetadataParam;
+import com.example.picturezipupload.mapper.param.BackfillMetadataParam;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -33,15 +33,13 @@ public class MyBatisPictureMaintenanceRepository implements PictureMaintenanceRe
     public void updateBackfillMetadata(String businessArea, String voiceCode, String contentSha256, long fileSize,
                                        String uploadId, String originalZipName, String operator,
                                        LocalDateTime updateTime) {
-        UpdateBackfillMetadataParam param = new UpdateBackfillMetadataParam();
-        param.setTableName(tableResolver.resolve(businessArea));
-        param.setVoiceCode(voiceCode);
-        param.setContentSha256(contentSha256);
-        param.setFileSize(fileSize);
-        param.setUploadId(uploadId);
-        param.setOriginalZipName(originalZipName);
-        param.setOperator(operator);
-        param.setUpdateTime(updateTime);
-        mapper.updateBackfillMetadata(param);
+        BackfillMetadataParam backfillMetadata = new BackfillMetadataParam();
+        backfillMetadata.setContentSha256(contentSha256);
+        backfillMetadata.setFileSize(fileSize);
+        backfillMetadata.setUploadId(uploadId);
+        backfillMetadata.setOriginalZipName(originalZipName);
+        backfillMetadata.setOperator(operator);
+        backfillMetadata.setUpdateTime(updateTime);
+        mapper.updateBackfillMetadata(tableResolver.resolve(businessArea), voiceCode, backfillMetadata);
     }
 }

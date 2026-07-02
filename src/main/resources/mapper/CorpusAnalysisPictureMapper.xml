@@ -60,16 +60,15 @@
         )
     </insert>
 
-    <update id="updateDuplicateImport"
-            parameterType="com.example.picturezipupload.mapper.param.UpdateDuplicateImportParam">
+    <update id="updateDuplicateImport">
         UPDATE ${tableName}
         SET
-            filename = #{filename},
-            extname = #{extname},
-            update_time = #{updateTime},
-            upload_id = #{uploadId},
-            original_zip_name = #{originalZipName},
-            operator = #{operator}
+            filename = #{duplicateImportMetadata.filename},
+            extname = #{duplicateImportMetadata.extname},
+            update_time = #{duplicateImportMetadata.updateTime},
+            upload_id = #{duplicateImportMetadata.uploadId},
+            original_zip_name = #{duplicateImportMetadata.originalZipName},
+            operator = #{duplicateImportMetadata.operator}
         WHERE content_sha256 = #{contentSha256}
     </update>
 
@@ -84,16 +83,15 @@
         LIMIT #{limit}
     </select>
 
-    <update id="updateBackfillMetadata"
-            parameterType="com.example.picturezipupload.mapper.param.UpdateBackfillMetadataParam">
+    <update id="updateBackfillMetadata">
         UPDATE ${tableName}
         SET
-            content_sha256 = #{contentSha256},
-            file_size = #{fileSize},
-            upload_id = #{uploadId},
-            original_zip_name = #{originalZipName},
-            operator = #{operator},
-            update_time = #{updateTime}
+            content_sha256 = #{backfillMetadata.contentSha256},
+            file_size = #{backfillMetadata.fileSize},
+            upload_id = #{backfillMetadata.uploadId},
+            original_zip_name = #{backfillMetadata.originalZipName},
+            operator = #{backfillMetadata.operator},
+            update_time = #{backfillMetadata.updateTime}
         WHERE voice_code = #{voiceCode}
     </update>
 </mapper>

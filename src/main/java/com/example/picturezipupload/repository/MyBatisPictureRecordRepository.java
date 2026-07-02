@@ -3,7 +3,7 @@ package com.example.picturezipupload.repository;
 import com.example.picturezipupload.config.BusinessAreaTableResolver;
 import com.example.picturezipupload.domain.PictureRecord;
 import com.example.picturezipupload.mapper.CorpusAnalysisPictureMapper;
-import com.example.picturezipupload.mapper.param.UpdateDuplicateImportParam;
+import com.example.picturezipupload.mapper.param.DuplicateImportMetadataParam;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -36,15 +36,13 @@ public class MyBatisPictureRecordRepository implements PictureRecordRepository {
     @Override
     public void updateDuplicateImport(String businessArea, String contentSha256, String filename, String extname,
                                       String uploadId, String originalZipName, String operator, LocalDateTime updateTime) {
-        UpdateDuplicateImportParam param = new UpdateDuplicateImportParam();
-        param.setTableName(tableResolver.resolve(businessArea));
-        param.setContentSha256(contentSha256);
-        param.setFilename(filename);
-        param.setExtname(extname);
-        param.setUploadId(uploadId);
-        param.setOriginalZipName(originalZipName);
-        param.setOperator(operator);
-        param.setUpdateTime(updateTime);
-        mapper.updateDuplicateImport(param);
+        DuplicateImportMetadataParam metadata = new DuplicateImportMetadataParam();
+        metadata.setFilename(filename);
+        metadata.setExtname(extname);
+        metadata.setUploadId(uploadId);
+        metadata.setOriginalZipName(originalZipName);
+        metadata.setOperator(operator);
+        metadata.setUpdateTime(updateTime);
+        mapper.updateDuplicateImport(tableResolver.resolve(businessArea), contentSha256, metadata);
     }
 }

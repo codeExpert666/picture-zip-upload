@@ -1,8 +1,8 @@
 package com.example.picturezipupload.mapper;
 
 import com.example.picturezipupload.domain.PictureRecord;
-import com.example.picturezipupload.mapper.param.UpdateBackfillMetadataParam;
-import com.example.picturezipupload.mapper.param.UpdateDuplicateImportParam;
+import com.example.picturezipupload.mapper.param.BackfillMetadataParam;
+import com.example.picturezipupload.mapper.param.DuplicateImportMetadataParam;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -31,7 +31,9 @@ public interface CorpusAnalysisPictureMapper {
      *
      * <p>这里刻意不更新状态、物理路径和首次导入时间，避免覆盖既有标注流程。</p>
      */
-    void updateDuplicateImport(UpdateDuplicateImportParam param);
+    void updateDuplicateImport(@Param("tableName") String tableName,
+                               @Param("contentSha256") String contentSha256,
+                               @Param("duplicateImportMetadata") DuplicateImportMetadataParam duplicateImportMetadata);
 
     /**
      * 查询缺少新增元数据的历史记录，用于维护脚本回填。
@@ -42,5 +44,7 @@ public interface CorpusAnalysisPictureMapper {
     /**
      * 回填历史记录的内容哈希和文件大小。
      */
-    void updateBackfillMetadata(UpdateBackfillMetadataParam param);
+    void updateBackfillMetadata(@Param("tableName") String tableName,
+                                @Param("voiceCode") String voiceCode,
+                                @Param("backfillMetadata") BackfillMetadataParam backfillMetadata);
 }
