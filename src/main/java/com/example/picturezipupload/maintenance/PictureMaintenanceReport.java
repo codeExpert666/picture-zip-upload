@@ -7,12 +7,39 @@ package com.example.picturezipupload.maintenance;
  */
 public class PictureMaintenanceReport {
 
+    /**
+     * 当前任务扫描或读取到的文件/记录数量。
+     */
     private long scanned;
+
+    /**
+     * 新目录导入中可插入或已插入的记录数量；dry-run 时表示预计写入量。
+     */
     private long inserted;
+
+    /**
+     * 内容哈希已存在而跳过的图片数量。
+     */
     private long duplicated;
+
+    /**
+     * 旧记录回填中可回填或已回填的记录数量；dry-run 时表示预计回填量。
+     */
     private long backfilled;
+
+    /**
+     * 扩展名不支持、魔数不匹配或文件内容不是有效图片的数量。
+     */
     private long invalid;
+
+    /**
+     * 旧记录无法定位到本地文件的数量。
+     */
     private long missing;
+
+    /**
+     * 旧记录重新计算出的内容哈希与其他记录冲突的数量。
+     */
     private long conflicted;
 
     public long getScanned() {
