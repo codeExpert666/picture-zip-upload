@@ -12,7 +12,7 @@
 当前业务中存在两类需要维护的数据：
 
 1. 历史已上传图片：文件已经在旧静态资源目录下，数据库中也有记录，但表结构新增字段尚未回填。
-2. 数据组临时直接上传的新图片：图片文件已经被直接放到服务器目录，例如 `/data/pictures`，但业务图片表中还没有记录。
+2. 数据组直接放到服务器的新图片：图片文件已经在正式图片根目录，例如 `/data/pictures`，但业务图片表中还没有记录。
 
 本次方案采用零复制处理：
 
@@ -40,7 +40,7 @@ scripts/backfill-existing-picture-records.sh
 scripts/import-direct-picture-directory.sh
 ```
 
-用途：递归扫描一个服务器目录，例如 `/data/pictures`，把尚未入库的图片按原地引用方式插入业务图片表。
+用途：递归扫描正式图片根目录，例如 `/data/pictures`，把尚未入库的图片按原地引用方式插入业务图片表。
 
 该脚本会校验图片扩展名和图片魔数，计算 SHA-256，按 `content_sha256` 判重。
 
@@ -93,30 +93,31 @@ for /f %i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"
 
 ### 3. 配置静态资源目录
 
-旧图片和后续接口上传图片继续使用原静态目录，例如：
+后续接口上传图片和数据组直接放到服务器的新图片使用同一个正式图片根目录，例如：
 
 ```text
-/api/pictures/files/** -> /data/picture-upload/images/**
+/api/pictures/files/** -> /data/pictures/**
 ```
 
-数据组直接上传的新目录使用额外静态目录，例如：
+旧图片保留原始 URL 前缀，例如：
 
 ```text
-/api/pictures/direct/** -> /data/pictures/**
+/corpusImages/** -> /data/corpusImages/**
 ```
 
 示例配置：
 
 ```yaml
 picture-upload:
-  root-path: /data/picture-upload
+  work-root-path: /data/picture-upload-work
+  image-root-path: /data/pictures
   public-url-prefix: /api/pictures/files
   business-area-tables:
     medical: medical_corpus_analysis_picture
-  extra-static-locations:
-    direct:
-      root-path: /data/pictures
-      public-url-prefix: /api/pictures/direct
+  legacy-static-locations:
+    corpus-images:
+      root-path: /data/corpusImages
+      public-url-prefix: /corpusImages
 ```
 
 ### 4. 确认应用连接配置
@@ -127,9 +128,9 @@ picture-upload:
 export MYSQL_URL='jdbc:mysql://127.0.0.1:3306/ai_dataset?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai'
 export MYSQL_USERNAME='root'
 export MYSQL_PASSWORD='your-password'
-export PICTURE_UPLOAD_ROOT='/data/picture-upload'
-export PICTURE_DIRECT_ROOT='/data/pictures'
-export PICTURE_DIRECT_PUBLIC_URL_PREFIX='/api/pictures/direct'
+export PICTURE_UPLOAD_WORK_ROOT='/data/picture-upload-work'
+export PICTURE_IMAGE_ROOT='/data/pictures'
+export PICTURE_LEGACY_IMAGE_ROOT='/data/corpusImages'
 ```
 
 如果需要指定已有 jar，可以设置：
@@ -192,7 +193,7 @@ scripts/backfill-existing-picture-records.sh \
 ```bash
 scripts/backfill-existing-picture-records.sh \
   --business-area medical \
-  --legacy-root /data/picture-upload/images \
+  --legacy-root /data/corpusImages \
   --operator data-team \
   --batch-id legacy-backfill-20260702 \
   --limit 1000 \
@@ -248,8 +249,6 @@ dry-run：
 ```bash
 scripts/import-direct-picture-directory.sh \
   --business-area medical \
-  --source-root /data/pictures \
-  --public-url-prefix /api/pictures/direct \
   --operator data-team \
   --batch-id direct-import-20260702 \
   --dry-run true
@@ -260,8 +259,6 @@ scripts/import-direct-picture-directory.sh \
 ```bash
 scripts/import-direct-picture-directory.sh \
   --business-area medical \
-  --source-root /data/pictures \
-  --public-url-prefix /api/pictures/direct \
   --operator data-team \
   --batch-id direct-import-20260702 \
   --dry-run false
@@ -272,15 +269,15 @@ scripts/import-direct-picture-directory.sh \
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
 | `--business-area` | 是 | 业务领域编码，会通过白名单解析到具体图片表 |
-| `--source-root` | 是 | 数据组直接上传图片所在根目录，例如 `/data/pictures` |
-| `--public-url-prefix` | 是 | 对应的静态资源 URL 前缀，例如 `/api/pictures/direct` |
+| `--source-root` | 否 | 默认使用 `picture-upload.image-root-path`，需要临时覆盖扫描目录时再传 |
+| `--public-url-prefix` | 否 | 默认使用 `picture-upload.public-url-prefix`，需要临时覆盖 URL 前缀时再传 |
 | `--operator` | 否 | 操作人，写入 `operator` 字段 |
 | `--batch-id` | 是 | 本次导入批次号，写入 `upload_id` 字段 |
 | `--dry-run` | 否 | 是否只统计不写库，默认应用配置为 `true` |
 
 ### 入库行为
 
-脚本会递归扫描 `--source-root` 下的普通文件，并执行以下逻辑：
+脚本会递归扫描正式图片根目录或 `--source-root` 覆盖目录下的普通文件，并执行以下逻辑：
 
 1. 校验扩展名是否支持：`jpg`、`jpeg`、`png`、`webp`、`bmp`、`gif`。
 2. 校验图片魔数，避免非图片伪装成图片入库。
@@ -316,7 +313,7 @@ scripts/import-direct-picture-directory.sh \
 `file_URL` 保存 URL path 编码后的路径：
 
 ```text
-/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png
+/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png
 ```
 
 编码规则：
@@ -391,7 +388,7 @@ LIMIT 20;
 拿 `file_URL` 到浏览器或用 `curl` 抽样访问：
 
 ```bash
-curl -I 'http://server-host/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E5%9B%BE%E7%89%87%20001.png'
+curl -I 'http://server-host/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E5%9B%BE%E7%89%87%20001.png'
 ```
 
 ## 常见问题
@@ -404,8 +401,8 @@ curl -I 'http://server-host/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E
 
 检查：
 
-1. `picture-upload.extra-static-locations` 是否配置了对应 URL 前缀。
-2. `root-path` 是否指向真实图片目录。
+1. 新图确认 `picture-upload.public-url-prefix` 和 `picture-upload.image-root-path` 是否匹配。
+2. 旧图确认 `picture-upload.legacy-static-locations` 是否配置了 `/corpusImages` 和真实旧目录。
 3. 数据库中的 `file_URL` 是否使用了正确的 `public-url-prefix`。
 4. 中文和空格是否按 URL path 编码。
 
@@ -451,4 +448,4 @@ WHERE upload_id = 'direct-import-20260702';
 - 脚本不复制大图片，避免额外占用服务器磁盘。
 - 脚本不修改旧记录标注状态。
 - 脚本默认 dry-run，正式执行必须显式设置 `--dry-run false`。
-- 新目录导入只引用 `--source-root` 下的安全相对路径。
+- 新目录导入只引用正式图片根目录或 `--source-root` 覆盖目录下的安全相对路径。

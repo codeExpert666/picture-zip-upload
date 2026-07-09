@@ -34,17 +34,17 @@ class PictureMaintenanceServiceTest {
         Files.write(image, tinyPng());
         InMemoryPictureRecordRepository pictureRepository = new InMemoryPictureRecordRepository();
         PictureMaintenanceService service = service(pictureRepository, new InMemoryPictureMaintenanceRepository(),
-                Map.of("/api/pictures/direct", sourceRoot));
+                Map.of("/api/pictures/files", sourceRoot));
 
         PictureMaintenanceReport report = service.importDirectDirectory(
-                "medical", sourceRoot, "/api/pictures/direct", "data-team", "direct-import-20260701", false);
+                "medical", sourceRoot, "/api/pictures/files", "data-team", "direct-import-20260701", false);
 
         assertThat(report.getScanned()).isEqualTo(1);
         assertThat(report.getInserted()).isEqualTo(1);
         assertThat(pictureRepository.inserted).hasSize(1);
         PictureRecord record = pictureRepository.inserted.get(0);
         assertThat(record.getFilePath()).isEqualTo(image.toAbsolutePath().normalize().toString());
-        assertThat(record.getFileUrl()).isEqualTo("/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/"
+        assertThat(record.getFileUrl()).isEqualTo("/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/"
                 + "%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png");
         assertThat(record.getOriginalZipName()).isEqualTo("DIRECT:" + sourceRoot.toAbsolutePath().normalize());
         assertThat(Files.exists(image)).isTrue();

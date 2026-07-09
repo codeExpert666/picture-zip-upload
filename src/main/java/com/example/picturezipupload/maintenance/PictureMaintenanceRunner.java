@@ -22,11 +22,14 @@ public class PictureMaintenanceRunner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(PictureMaintenanceRunner.class);
 
     private final PictureMaintenanceProperties maintenanceProperties;
+    private final PictureUploadProperties uploadProperties;
     private final PictureMaintenanceService maintenanceService;
 
     public PictureMaintenanceRunner(PictureMaintenanceProperties maintenanceProperties,
+                                    PictureUploadProperties uploadProperties,
                                     PictureMaintenanceService maintenanceService) {
         this.maintenanceProperties = maintenanceProperties;
+        this.uploadProperties = uploadProperties;
         this.maintenanceService = maintenanceService;
     }
 
@@ -49,8 +52,8 @@ public class PictureMaintenanceRunner implements ApplicationRunner {
                     maintenanceProperties.isDryRun());
             case IMPORT_DIRECT -> maintenanceService.importDirectDirectory(
                     required("businessArea", maintenanceProperties.getBusinessArea()),
-                    required("sourceRoot", maintenanceProperties.getSourceRoot()),
-                    required("publicUrlPrefix", maintenanceProperties.getPublicUrlPrefix()),
+                    defaultPath(maintenanceProperties.getSourceRoot(), uploadProperties.imagesPath()),
+                    defaultText(maintenanceProperties.getPublicUrlPrefix(), uploadProperties.getPublicUrlPrefix()),
                     maintenanceProperties.getOperator(),
                     required("batchId", maintenanceProperties.getBatchId()),
                     maintenanceProperties.isDryRun());
@@ -65,7 +68,7 @@ public class PictureMaintenanceRunner implements ApplicationRunner {
     public static StaticPicturePathResolver pathResolver(PictureUploadProperties uploadProperties) {
         Map<String, Path> mappings = new LinkedHashMap<>();
         mappings.put(uploadProperties.getPublicUrlPrefix(), uploadProperties.imagesPath());
-        uploadProperties.getExtraStaticLocations().values().forEach(location -> {
+        uploadProperties.getLegacyStaticLocations().values().forEach(location -> {
             if (location.getPublicUrlPrefix() != null && location.getRootPath() != null) {
                 mappings.put(location.getPublicUrlPrefix(), location.getRootPath());
             }
@@ -85,5 +88,13 @@ public class PictureMaintenanceRunner implements ApplicationRunner {
             throw new IllegalArgumentException("picture-maintenance." + name + " 不能为空");
         }
         return value;
+    }
+
+    private static Path defaultPath(Path value, Path defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
+    private static String defaultText(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 }

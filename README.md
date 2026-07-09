@@ -13,7 +13,7 @@
 - 新图片按 `businessArea` 写入对应的 `xxx_corpus_analysis_picture`，默认 `status = MARK`。
 - 重复图片不重复存储，不新增记录，只更新 `filename`、`extname`、`update_time`、`upload_id`、`original_zip_name`、`operator`。
 - Redis 或内存记录上传与后台导入进度，包含导入总文件数 `totalFiles`。
-- 通过 `/api/pictures/files/**` 提供接口上传图片访问，可配置额外静态目录访问直接上传图片。
+- 通过 `/api/pictures/files/**` 访问新图片，并保留 `/corpusImages/**` 等旧图静态映射。
 
 ## 接口
 
@@ -106,36 +106,44 @@ GET /api/picture-zip/uploads/{uploadId}
 
 ## 存储目录
 
-默认根目录为 `/tmp/picture-upload`，可通过环境变量调整：
+上传工作目录默认是 `/tmp/picture-upload`，正式图片根目录默认是 `/data/pictures`，可通过环境变量调整：
 
 ```bash
-export PICTURE_UPLOAD_ROOT=/data/picture-upload
+export PICTURE_UPLOAD_WORK_ROOT=/data/picture-upload-work
+export PICTURE_IMAGE_ROOT=/data/pictures
+export PICTURE_LEGACY_IMAGE_ROOT=/data/corpusImages
 ```
 
 目录结构：
 
 ```text
-/data/picture-upload/
+/data/picture-upload-work/
   chunks/{uploadId}/chunk-000000.part
   zips/{uploadId}.zip
-  images/{sha256前2位}/{sha256}.{ext}
   tmp/{uploadId}/...
+
+/data/pictures/
+  {sha256前2位}/{sha256}.{ext}
+  病理 图像/第一批/图片 001.png
 ```
 
-额外静态目录可用于零复制访问数据组直接上传的图片：
+`/data/pictures` 同时作为数据组直接放到服务器的新图片目录和后续接口上传图片的正式存储根目录。新图片统一使用 `/api/pictures/files` 访问；旧图片原始 URL 前缀 `/corpusImages` 保留为独立静态映射：
 
 ```yaml
 picture-upload:
-  extra-static-locations:
-    direct:
-      root-path: /data/pictures
-      public-url-prefix: /api/pictures/direct
+  work-root-path: /data/picture-upload-work
+  image-root-path: /data/pictures
+  public-url-prefix: /api/pictures/files
+  legacy-static-locations:
+    corpus-images:
+      root-path: /data/corpusImages
+      public-url-prefix: /corpusImages
 ```
 
 例如 `/data/pictures/病理 图像/第一批/图片 001.png` 的 `file_URL` 应保存为按路径段 UTF-8 编码后的 URL：
 
 ```text
-/api/pictures/direct/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png
+/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5%83%8F/%E7%AC%AC%E4%B8%80%E6%89%B9/%E5%9B%BE%E7%89%87%20001.png
 ```
 
 ## 数据库
@@ -162,7 +170,7 @@ picture-upload:
 
 1. 备份目标业务表。
 2. 执行 `db/picture-maintenance-migration.sql` 的字段扩容和新增可空字段部分。
-3. 部署包含额外静态目录配置的应用。
+3. 部署包含主图片根目录和旧图片静态映射配置的应用。
 4. dry-run 旧记录回填脚本。
 5. 正式执行旧记录回填脚本。
 6. 处理内容哈希冲突报告。
@@ -183,13 +191,11 @@ scripts/backfill-existing-picture-records.sh \
   --dry-run true
 ```
 
-新目录导入会递归扫描 `/data/pictures`，不复制、不移动图片，只写入原始 `file_path` 和编码后的 `file_URL`：
+新目录导入默认递归扫描 `picture-upload.image-root-path`，不复制、不移动图片，只写入原始 `file_path` 和编码后的 `file_URL`：
 
 ```bash
 scripts/import-direct-picture-directory.sh \
   --business-area medical \
-  --source-root /data/pictures \
-  --public-url-prefix /api/pictures/direct \
   --operator data-team \
   --batch-id direct-import-20260701 \
   --dry-run true

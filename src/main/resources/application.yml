@@ -26,18 +26,19 @@ mybatis:
     map-underscore-to-camel-case: true
 
 picture-upload:
-  root-path: ${PICTURE_UPLOAD_ROOT:/tmp/picture-upload}
+  work-root-path: ${PICTURE_UPLOAD_WORK_ROOT:/tmp/picture-upload}
+  image-root-path: ${PICTURE_IMAGE_ROOT:/data/pictures}
   public-url-prefix: /api/pictures/files
   # 本地样例默认使用内存进度；公司环境可改为 redis。
   progress-store: ${PICTURE_UPLOAD_PROGRESS_STORE:memory}
   # 业务领域到物理图片表名的白名单映射，不能直接信任前端传入的表名。
   business-area-tables:
     medical: medical_corpus_analysis_picture
-  # 额外静态资源目录示例：用于零复制访问数据组直接上传的图片目录。
-  extra-static-locations:
-    direct:
-      root-path: ${PICTURE_DIRECT_ROOT:/data/pictures}
-      public-url-prefix: ${PICTURE_DIRECT_PUBLIC_URL_PREFIX:/api/pictures/direct}
+  # 旧图片目录只用于保留历史 file_URL 可访问性，新接口上传统一写入 image-root-path。
+  legacy-static-locations:
+    corpus-images:
+      root-path: ${PICTURE_LEGACY_IMAGE_ROOT:/data/corpusImages}
+      public-url-prefix: /corpusImages
   import-core-pool-size: 2
   import-max-pool-size: 4
   import-queue-capacity: 64

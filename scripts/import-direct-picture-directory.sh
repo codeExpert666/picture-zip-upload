@@ -6,6 +6,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_JAR="${APP_JAR:-${PROJECT_DIR}/target/picture-zip-upload-0.0.1-SNAPSHOT.jar}"
 
 # 将脚本友好的参数名转换成 Spring Boot 配置参数。
+# 未传 --source-root/--public-url-prefix 时，Runner 默认使用主图片根目录和主图片 URL 前缀。
 translate_args() {
   local translated=()
   while [[ $# -gt 0 ]]; do

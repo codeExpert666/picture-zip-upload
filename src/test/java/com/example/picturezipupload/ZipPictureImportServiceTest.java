@@ -29,7 +29,10 @@ class ZipPictureImportServiceTest {
     @Test
     void storesDuplicateImageContentOnlyOnceAndUpdatesExistingRecord() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        Path workRoot = tempDir.resolve("work");
+        Path imageRoot = tempDir.resolve("pictures");
+        properties.setWorkRootPath(workRoot);
+        properties.setImageRootPath(imageRoot);
         properties.setPublicUrlPrefix("/api/pictures/files");
         InMemoryPictureRecordRepository repository = new InMemoryPictureRecordRepository();
         InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
@@ -46,11 +49,14 @@ class ZipPictureImportServiceTest {
         assertThat(repository.duplicateUpdates).hasSize(1);
         assertThat(repository.insertBusinessAreas).containsExactly("medical");
         assertThat(repository.inserted.get(0).getOperator()).isEqualTo("alice");
+        assertThat(repository.inserted.get(0).getFileUrl()).startsWith("/api/pictures/files/");
+        assertThat(repository.inserted.get(0).getFilePath()).startsWith(imageRoot.toAbsolutePath().toString());
         assertThat(repository.duplicateUpdates.get(0).businessArea()).isEqualTo("medical");
         assertThat(repository.duplicateUpdates.get(0).operator()).isEqualTo("alice");
-        assertThat(Files.walk(tempDir.resolve("images"))
+        assertThat(Files.walk(imageRoot)
                 .filter(Files::isRegularFile)
                 .count()).isEqualTo(1);
+        assertThat(workRoot.resolve("images")).doesNotExist();
 
         UploadTaskProgress progress = progressStore.get("upload-1").orElseThrow();
         assertThat(progress.getTotalFiles()).isEqualTo(2);
@@ -63,7 +69,8 @@ class ZipPictureImportServiceTest {
     @Test
     void countsNonDirectoryEntriesBeforeImportingFiles() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir.resolve("work"));
+        properties.setImageRootPath(tempDir.resolve("pictures"));
         properties.setPublicUrlPrefix("/api/pictures/files");
         InMemoryPictureRecordRepository repository = new InMemoryPictureRecordRepository();
         InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();
@@ -97,7 +104,8 @@ class ZipPictureImportServiceTest {
     @Test
     void importsNestedZipImagesAndStoresOnlyBaseFilename() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir.resolve("work"));
+        properties.setImageRootPath(tempDir.resolve("pictures"));
         properties.setPublicUrlPrefix("/api/pictures/files");
         InMemoryPictureRecordRepository repository = new InMemoryPictureRecordRepository();
         InMemoryUploadProgressStore progressStore = new InMemoryUploadProgressStore();

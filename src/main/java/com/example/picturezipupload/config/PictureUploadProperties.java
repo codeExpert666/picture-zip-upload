@@ -10,15 +10,20 @@ import java.util.Map;
 /**
  * 图片上传模块配置。
  *
- * <p>路径配置统一从根目录派生，便于将本地文件系统替换为挂载盘或对象存储适配层。</p>
+ * <p>分片/zip/tmp 使用工作目录，正式图片使用独立图片根目录，便于把服务器直放图片目录作为后续接口上传的统一图片根。</p>
  */
 @ConfigurationProperties(prefix = "picture-upload")
 public class PictureUploadProperties {
 
     /**
-     * 上传模块根目录，下面会分出 chunks、zips、images、tmp 四类子目录。
+     * 上传工作目录，下面会分出 chunks、zips、tmp 三类临时或中间目录。
      */
-    private Path rootPath = Paths.get(System.getProperty("java.io.tmpdir"), "picture-upload");
+    private Path workRootPath = Paths.get(System.getProperty("java.io.tmpdir"), "picture-upload");
+
+    /**
+     * 正式图片存储根目录。数据组直接放到服务器的新图片目录也应配置为该目录。
+     */
+    private Path imageRootPath = Paths.get("/data/pictures");
 
     /**
      * 图片对外访问 URL 前缀，应与静态资源映射保持一致。
@@ -56,16 +61,24 @@ public class PictureUploadProperties {
     private Map<String, String> businessAreaTables = new LinkedHashMap<>();
 
     /**
-     * 额外静态资源目录，用于临时直接上传目录等不复制到正式 images 目录的图片。
+     * 旧图片静态资源目录，用于保留历史 file_URL 可访问性。
      */
-    private Map<String, StaticLocation> extraStaticLocations = new LinkedHashMap<>();
+    private Map<String, StaticLocation> legacyStaticLocations = new LinkedHashMap<>();
 
-    public Path getRootPath() {
-        return rootPath;
+    public Path getWorkRootPath() {
+        return workRootPath;
     }
 
-    public void setRootPath(Path rootPath) {
-        this.rootPath = rootPath;
+    public void setWorkRootPath(Path workRootPath) {
+        this.workRootPath = workRootPath;
+    }
+
+    public Path getImageRootPath() {
+        return imageRootPath;
+    }
+
+    public void setImageRootPath(Path imageRootPath) {
+        this.imageRootPath = imageRootPath;
     }
 
     public String getPublicUrlPrefix() {
@@ -124,39 +137,39 @@ public class PictureUploadProperties {
         this.businessAreaTables = businessAreaTables == null ? new LinkedHashMap<>() : new LinkedHashMap<>(businessAreaTables);
     }
 
-    public Map<String, StaticLocation> getExtraStaticLocations() {
-        return extraStaticLocations;
+    public Map<String, StaticLocation> getLegacyStaticLocations() {
+        return legacyStaticLocations;
     }
 
-    public void setExtraStaticLocations(Map<String, StaticLocation> extraStaticLocations) {
-        this.extraStaticLocations = extraStaticLocations == null
+    public void setLegacyStaticLocations(Map<String, StaticLocation> legacyStaticLocations) {
+        this.legacyStaticLocations = legacyStaticLocations == null
                 ? new LinkedHashMap<>()
-                : new LinkedHashMap<>(extraStaticLocations);
+                : new LinkedHashMap<>(legacyStaticLocations);
     }
 
     public Path chunksPath() {
-        return rootPath.resolve("chunks");
+        return workRootPath.resolve("chunks");
     }
 
     /**
      * 合并后的原始 zip 存储目录。
      */
     public Path zipsPath() {
-        return rootPath.resolve("zips");
+        return workRootPath.resolve("zips");
     }
 
     /**
-     * 去重后的图片正式存储目录。
+     * 去重后的图片正式存储根目录。
      */
     public Path imagesPath() {
-        return rootPath.resolve("images");
+        return imageRootPath;
     }
 
     /**
      * 解压单张图片时的临时文件目录。
      */
     public Path tempPath() {
-        return rootPath.resolve("tmp");
+        return workRootPath.resolve("tmp");
     }
 
     private static String trimTrailingSlash(String value) {
@@ -171,7 +184,7 @@ public class PictureUploadProperties {
     }
 
     /**
-     * 一个额外静态资源 URL 前缀和本地目录的映射。
+     * 一个静态资源 URL 前缀和本地目录的映射。
      */
     public static class StaticLocation {
 

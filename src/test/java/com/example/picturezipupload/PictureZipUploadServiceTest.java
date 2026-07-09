@@ -164,7 +164,7 @@ class PictureZipUploadServiceTest {
 
     private FileUploadStorageService storageService() {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir);
         return new FileUploadStorageService(properties);
     }
 

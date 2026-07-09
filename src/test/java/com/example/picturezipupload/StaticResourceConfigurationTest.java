@@ -16,23 +16,24 @@ import static org.mockito.Mockito.when;
 class StaticResourceConfigurationTest {
 
     @Test
-    void registersDefaultAndExtraStaticResourceLocations() {
+    void registersMainImageRootAndLegacyStaticResourceLocations() {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(Path.of("/data/picture-upload"));
+        properties.setWorkRootPath(Path.of("/data/picture-upload-work"));
+        properties.setImageRootPath(Path.of("/data/pictures"));
         properties.setPublicUrlPrefix("/api/pictures/files/");
-        PictureUploadProperties.StaticLocation direct = new PictureUploadProperties.StaticLocation();
-        direct.setRootPath(Path.of("/data/pictures"));
-        direct.setPublicUrlPrefix("/api/pictures/direct/");
-        properties.setExtraStaticLocations(Map.of("direct", direct));
+        PictureUploadProperties.StaticLocation legacy = new PictureUploadProperties.StaticLocation();
+        legacy.setRootPath(Path.of("/data/corpusImages"));
+        legacy.setPublicUrlPrefix("/corpusImages/");
+        properties.setLegacyStaticLocations(Map.of("corpus-images", legacy));
         ResourceHandlerRegistry registry = mock(ResourceHandlerRegistry.class);
         ResourceHandlerRegistration defaultRegistration = mock(ResourceHandlerRegistration.class);
-        ResourceHandlerRegistration directRegistration = mock(ResourceHandlerRegistration.class);
+        ResourceHandlerRegistration legacyRegistration = mock(ResourceHandlerRegistration.class);
         when(registry.addResourceHandler("/api/pictures/files/**")).thenReturn(defaultRegistration);
-        when(registry.addResourceHandler("/api/pictures/direct/**")).thenReturn(directRegistration);
+        when(registry.addResourceHandler("/corpusImages/**")).thenReturn(legacyRegistration);
 
         new StaticResourceConfiguration(properties).addResourceHandlers(registry);
 
-        verify(defaultRegistration).addResourceLocations(Path.of("/data/picture-upload/images").toUri().toString());
-        verify(directRegistration).addResourceLocations(Path.of("/data/pictures").toUri().toString());
+        verify(defaultRegistration).addResourceLocations(Path.of("/data/pictures").toUri().toString());
+        verify(legacyRegistration).addResourceLocations(Path.of("/data/corpusImages").toUri().toString());
     }
 }

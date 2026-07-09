@@ -31,7 +31,7 @@ public class PictureMaintenanceProperties {
     private String businessArea;
 
     /**
-     * 新目录导入模式下的服务器图片根目录。
+     * 新目录导入模式下的扫描目录；未配置时使用 {@code picture-upload.image-root-path}。
      */
     private Path sourceRoot;
 
@@ -41,7 +41,7 @@ public class PictureMaintenanceProperties {
     private Path legacyRoot;
 
     /**
-     * 新目录导入模式下写入 {@code file_URL} 的静态资源 URL 前缀。
+     * 新目录导入模式下写入 {@code file_URL} 的 URL 前缀；未配置时使用 {@code picture-upload.public-url-prefix}。
      */
     private String publicUrlPrefix;
 

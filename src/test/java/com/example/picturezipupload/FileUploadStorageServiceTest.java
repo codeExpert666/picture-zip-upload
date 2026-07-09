@@ -22,7 +22,9 @@ class FileUploadStorageServiceTest {
     @Test
     void mergesChunksInIndexOrder() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        Path workRoot = tempDir.resolve("work");
+        properties.setWorkRootPath(workRoot);
+        properties.setImageRootPath(tempDir.resolve("pictures"));
         FileUploadStorageService service = new FileUploadStorageService(properties);
 
         service.saveChunk("upload-1", 1, new ByteArrayInputStream("world".getBytes()));
@@ -32,12 +34,14 @@ class FileUploadStorageServiceTest {
 
         assertThat(Files.readString(merged)).isEqualTo("hello world");
         assertThat(merged).exists();
+        assertThat(merged).startsWith(workRoot.resolve("zips"));
+        assertThat(tempDir.resolve("pictures")).doesNotExist();
     }
 
     @Test
     void listsUploadedChunkIndexesInAscendingOrder() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir);
         FileUploadStorageService service = new FileUploadStorageService(properties);
 
         service.saveChunk("upload-1", 2, new ByteArrayInputStream("two".getBytes()));
@@ -51,7 +55,7 @@ class FileUploadStorageServiceTest {
     @Test
     void deletesChunkDirectoryForCanceledUpload() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir);
         FileUploadStorageService service = new FileUploadStorageService(properties);
 
         service.saveChunk("upload-1", 0, new ByteArrayInputStream("zero".getBytes()));
@@ -68,7 +72,7 @@ class FileUploadStorageServiceTest {
     @Test
     void savesChunkWhenSha256ChecksumMatches() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir);
         FileUploadStorageService service = new FileUploadStorageService(properties);
 
         service.saveChunk(
@@ -85,7 +89,7 @@ class FileUploadStorageServiceTest {
     @Test
     void rejectsMismatchedChecksumWithoutReplacingExistingChunk() throws Exception {
         PictureUploadProperties properties = new PictureUploadProperties();
-        properties.setRootPath(tempDir);
+        properties.setWorkRootPath(tempDir);
         FileUploadStorageService service = new FileUploadStorageService(properties);
         service.saveChunk("upload-1", 0, new ByteArrayInputStream("original".getBytes(StandardCharsets.UTF_8)));
 
