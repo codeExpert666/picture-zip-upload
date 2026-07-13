@@ -1,8 +1,12 @@
-target/
-.idea/
+.git
+.github
+.idea
+target
 *.iml
 .DS_Store
 .env
 .env.*
 !.env.example
 !.env.*.example
+docs
+*.md

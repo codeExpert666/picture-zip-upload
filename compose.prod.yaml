@@ -1,0 +1,44 @@
+services:
+  backend:
+    network_mode: host
+    environment:
+      SERVER_ADDRESS: 127.0.0.1
+      SERVER_PORT: ${BACKEND_PORT:-18080}
+      MYSQL_URL: ${MYSQL_URL:?MYSQL_URL must point to the existing host MySQL}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?MYSQL_USERNAME is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      REDIS_HOST: ${REDIS_HOST:-127.0.0.1}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      PICTURE_UPLOAD_PROGRESS_STORE: redis
+      PICTURE_UPLOAD_WORK_ROOT: /data/picture-upload-work
+      PICTURE_IMAGE_ROOT: /data/pictures
+      PICTURE_LEGACY_IMAGE_ROOT: /data/corpusImages
+    volumes:
+      - ${PICTURE_WORK_HOST_PATH:?PICTURE_WORK_HOST_PATH is required}:/data/picture-upload-work
+      - ${PICTURE_IMAGE_HOST_PATH:?PICTURE_IMAGE_HOST_PATH is required}:/data/pictures
+      - ${PICTURE_LEGACY_HOST_PATH:?PICTURE_LEGACY_HOST_PATH is required}:/data/corpusImages:ro
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-2g}
+    cpus: ${BACKEND_CPUS:-2.0}
+    pids_limit: ${BACKEND_PIDS_LIMIT:-256}
+
+  maintenance:
+    network_mode: host
+    environment:
+      MYSQL_URL: ${MYSQL_URL:?MYSQL_URL must point to the existing host MySQL}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?MYSQL_USERNAME is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      REDIS_HOST: ${REDIS_HOST:-127.0.0.1}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      PICTURE_UPLOAD_PROGRESS_STORE: redis
+      PICTURE_UPLOAD_WORK_ROOT: /data/picture-upload-work
+      PICTURE_IMAGE_ROOT: /data/pictures
+      PICTURE_LEGACY_IMAGE_ROOT: /data/corpusImages
+    volumes:
+      - ${PICTURE_WORK_HOST_PATH:?PICTURE_WORK_HOST_PATH is required}:/data/picture-upload-work
+      - ${PICTURE_IMAGE_HOST_PATH:?PICTURE_IMAGE_HOST_PATH is required}:/data/pictures
+      - ${PICTURE_LEGACY_HOST_PATH:?PICTURE_LEGACY_HOST_PATH is required}:/data/corpusImages:ro
+    mem_limit: ${MAINTENANCE_MEMORY_LIMIT:-2g}
+    cpus: ${MAINTENANCE_CPUS:-2.0}
+    pids_limit: ${BACKEND_PIDS_LIMIT:-256}

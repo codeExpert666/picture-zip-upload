@@ -219,3 +219,17 @@ mvn spring-boot:run
 ```
 
 如果本机没有 MySQL，应用启动时会因为数据源不可用失败。可以先启动 MySQL 并执行 `db/schema.sql`。
+
+## Docker Compose
+
+本地完整启动后端、MySQL 5.7 和 Redis 5.0.14：
+
+```bash
+cp .env.example .env
+docker compose --env-file .env \
+  -f compose.yaml -f compose.local.yaml \
+  up -d --build
+curl --fail http://127.0.0.1:8080/actuator/health
+```
+
+生产配置只容器化后端，继续连接 Ubuntu 宿主机上已有的 MySQL、Redis，并把真实图片目录 bind mount 进容器；它不会创建或迁移生产数据库。备份恢复演练、目录权限、Nginx 切换、回滚、维护任务 profile 和 Vue 前端模板详见 [DOCKER_DEPLOYMENT_GUIDE.md](DOCKER_DEPLOYMENT_GUIDE.md)。

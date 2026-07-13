@@ -1,7 +1,10 @@
 server:
   port: 8080
+  shutdown: graceful
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: ${SPRING_SHUTDOWN_TIMEOUT:60s}
   servlet:
     multipart:
       max-file-size: 128MB
@@ -24,6 +27,17 @@ mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
 
 picture-upload:
   work-root-path: ${PICTURE_UPLOAD_WORK_ROOT:/tmp/picture-upload}

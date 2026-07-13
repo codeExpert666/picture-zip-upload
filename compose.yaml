@@ -1,0 +1,58 @@
+name: ${COMPOSE_PROJECT_NAME:-picture-zip-upload}
+
+x-app-environment: &app-environment
+  TZ: ${TZ:-Asia/Shanghai}
+  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0 -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai}
+  SPRING_SHUTDOWN_TIMEOUT: ${SPRING_SHUTDOWN_TIMEOUT:-60s}
+
+x-app-service: &app-service
+  image: ${BACKEND_IMAGE:-picture-zip-upload:local}
+  platform: ${DOCKER_PLATFORM:-linux/amd64}
+  build:
+    context: .
+    args:
+      MAVEN_IMAGE: ${MAVEN_IMAGE:-maven:3.9.0-eclipse-temurin-17@sha256:8d19f7daf6e637d8ff45314861f964b08cee4279d8230c9fc4e4cc002e1c16e4}
+      RUNTIME_IMAGE: ${RUNTIME_IMAGE:-eclipse-temurin:17-jre-jammy@sha256:475d8e96b4b2bfe08999e5e854755c773af1581acdf959a4545d88f0696a2339}
+      MAVEN_OPTS: ${MAVEN_BUILD_OPTS:-}
+      APP_UID: ${APP_UID:-10001}
+      APP_GID: ${APP_GID:-10001}
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m,uid=${APP_UID:-10001},gid=${APP_GID:-10001}
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 60s
+  logging:
+    driver: json-file
+    options:
+      max-size: ${LOG_MAX_SIZE:-10m}
+      max-file: ${LOG_MAX_FILES:-5}
+
+services:
+  backend:
+    <<: *app-service
+    environment:
+      <<: *app-environment
+    restart: unless-stopped
+
+  maintenance:
+    <<: *app-service
+    profiles:
+      - maintenance
+    environment:
+      <<: *app-environment
+      SPRING_MAIN_WEB_APPLICATION_TYPE: none
+      PICTURE_MAINTENANCE_ENABLED: "true"
+      PICTURE_MAINTENANCE_MODE: ${MAINTENANCE_MODE:-IMPORT_DIRECT}
+      PICTURE_MAINTENANCE_DRY_RUN: ${MAINTENANCE_DRY_RUN:-true}
+      PICTURE_MAINTENANCE_BUSINESS_AREA: ${MAINTENANCE_BUSINESS_AREA:-medical}
+      PICTURE_MAINTENANCE_OPERATOR: ${MAINTENANCE_OPERATOR:-docker-operator}
+      PICTURE_MAINTENANCE_BATCH_ID: ${MAINTENANCE_BATCH_ID:-docker-dry-run}
+      PICTURE_MAINTENANCE_SOURCE_ROOT: ${MAINTENANCE_SOURCE_ROOT:-/data/pictures}
+      PICTURE_MAINTENANCE_LEGACY_ROOT: ${MAINTENANCE_LEGACY_ROOT:-/data/corpusImages}
+      PICTURE_MAINTENANCE_LIMIT: ${MAINTENANCE_LIMIT:-1000}
+    restart: "no"
+    healthcheck:
+      disable: true
