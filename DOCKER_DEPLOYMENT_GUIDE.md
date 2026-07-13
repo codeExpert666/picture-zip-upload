@@ -1,5 +1,7 @@
 # Docker 与 Docker Compose 部署指南
 
+本文是面向实际操作的部署手册。如果你还不熟悉镜像、容器、数据卷，或者看不懂 Dockerfile/Compose 语法，请先阅读 [Docker 配置学习指南](docs/docker/README.md)。
+
 ## 1. 部署边界
 
 本仓库采用两套运行拓扑：
@@ -154,7 +156,7 @@ docker compose --env-file "$ENV_FILE" \
   logs --tail=200 backend
 ```
 
-健康检查通过后，把 `docker/nginx/picture-zip-upload.conf.example` 中的 upstream/location 合并到现有 HTTPS virtual host：
+健康检查通过后，把 `docker/nginx/picture-zip-upload.conf.example` 中的 upstream/location 合并到现有 HTTPS virtual host。第一次接触这些指令时，请先阅读 [宿主机 Nginx 路由配置逐段解析](docs/docker/06-host-nginx-routing-explained.md)：
 
 ```bash
 sudo nginx -t
@@ -191,6 +193,8 @@ docker compose --env-file "$ENV_FILE" \
 检查报告和数据库备份后，才可把单次命令改为 `MAINTENANCE_DRY_RUN=false`。历史回填使用 `MAINTENANCE_MODE=BACKFILL_EXISTING`，详细数据校验和回滚步骤仍以 `PICTURE_MAINTENANCE_SCRIPTS_GUIDE.md` 为准。
 
 ## 8. Vue 前端仓库对接
+
+如果还不熟悉前端多阶段构建、`npm ci` 缓存、`dist` 复制和非 root Nginx，请先阅读 [前端 Dockerfile 样例逐段解析](docs/docker/04-frontend-dockerfile-example-explained.md)和 [前端容器 Nginx 配置逐段解析](docs/docker/05-frontend-nginx-conf-explained.md)。
 
 把以下模板复制到真实 Vue 3 仓库：
 

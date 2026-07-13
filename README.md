@@ -232,4 +232,7 @@ docker compose --env-file .env \
 curl --fail http://127.0.0.1:8080/actuator/health
 ```
 
-生产配置只容器化后端，继续连接 Ubuntu 宿主机上已有的 MySQL、Redis，并把真实图片目录 bind mount 进容器；它不会创建或迁移生产数据库。备份恢复演练、目录权限、Nginx 切换、回滚、维护任务 profile 和 Vue 前端模板详见 [DOCKER_DEPLOYMENT_GUIDE.md](DOCKER_DEPLOYMENT_GUIDE.md)。
+生产配置只容器化后端，继续连接 Ubuntu 宿主机上已有的 MySQL、Redis，并把真实图片目录 bind mount 进容器；它不会创建或迁移生产数据库。
+
+- Docker/Nginx 新手可从 [Docker 配置学习指南](docs/docker/README.md) 开始，继续阅读后端 Dockerfile、Compose、数据持久化、前端镜像以及容器/宿主机 Nginx 的逐段解释。
+- 实际生产操作以 [Docker 与 Docker Compose 部署指南](DOCKER_DEPLOYMENT_GUIDE.md) 为准，其中包含备份恢复演练、目录权限、Nginx 切换、回滚、维护任务 profile 和 Vue 前端模板说明。
