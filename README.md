@@ -232,6 +232,8 @@ docker compose --env-file .env \
 curl --fail http://127.0.0.1:8080/actuator/health
 ```
 
+如果构建必须使用公司 Maven `settings.xml`，请在 `.env` 中设置工作区外的绝对路径，并额外加载 `compose.maven-settings.yaml`；完整命令见部署指南。
+
 生产配置只容器化后端，继续连接 Ubuntu 宿主机上已有的 MySQL、Redis，并把真实图片目录 bind mount 进容器；它不会创建或迁移生产数据库。
 
 - Docker/Nginx 新手可从 [Docker 配置学习指南](docs/docker/README.md) 开始，继续阅读后端 Dockerfile、Compose、数据持久化、前端镜像以及容器/宿主机 Nginx 的逐段解释。

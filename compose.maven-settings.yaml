@@ -1,0 +1,14 @@
+services:
+  backend:
+    build:
+      secrets:
+        - maven_settings
+
+  maintenance:
+    build:
+      secrets:
+        - maven_settings
+
+secrets:
+  maven_settings:
+    file: ${MAVEN_SETTINGS_FILE:?MAVEN_SETTINGS_FILE must point to an absolute Maven settings.xml path}

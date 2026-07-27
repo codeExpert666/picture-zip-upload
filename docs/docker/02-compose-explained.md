@@ -12,6 +12,9 @@ docker compose --env-file .env \
 # 生产
 docker compose --env-file /etc/picture-zip-upload/production.env \
   -f compose.yaml -f compose.prod.yaml ...
+
+# 构建时需要公司 Maven settings.xml：在环境文件中设置 MAVEN_SETTINGS_FILE，
+# 并在原有 Compose 文件之后追加 -f compose.maven-settings.yaml
 ```
 
 ## 1. 先理解变量替换语法
@@ -114,6 +117,43 @@ build:
 | Compose `environment` | 创建容器时，可覆盖镜像默认值 | `MYSQL_URL`、`REDIS_HOST` |
 
 不要用 `build.args` 传密码，因为构建参数不是安全的 secret 机制。
+
+#### 使用公司 Maven `settings.xml`
+
+`compose.maven-settings.yaml` 给 `backend` 和 `maintenance` 的 `build` 配置补充同一个 BuildKit secret：
+
+```yaml
+services:
+  backend:
+    build:
+      secrets:
+        - maven_settings
+
+secrets:
+  maven_settings:
+    file: ${MAVEN_SETTINGS_FILE:?MAVEN_SETTINGS_FILE must point to an absolute Maven settings.xml path}
+```
+
+这里的顶层 `secrets` 定义宿主机文件来源，`build.secrets` 决定哪个镜像构建可以使用它。它不是运行期 `secrets`，因此启动后的后端容器不能读取该文件。
+
+在未纳入 Git 的 `.env` 中使用工作区外的绝对路径：
+
+```dotenv
+MAVEN_SETTINGS_FILE=/secure/path/settings.xml
+```
+
+构建时额外加载覆盖文件：
+
+```bash
+BUILDX_BAKE_ENTITLEMENTS_FS=0 \
+docker compose --env-file .env \
+  -f compose.yaml -f compose.local.yaml -f compose.maven-settings.yaml \
+  build backend
+```
+
+Docker Compose v5 通过 Buildx Bake 构建时，工作区外的 secret 文件会触发额外的文件读取确认。此前缀仅对当前可信命令关闭该确认，不应全局导出。
+
+没有 Maven secret 需求时不要加载这个文件；基础 Compose 组合仍可使用 Maven 默认配置构建。
 
 ### 2.4 只读根文件系统和临时目录
 
@@ -434,7 +474,7 @@ pids_limit: ${BACKEND_PIDS_LIMIT:-256}
 
 JVM 的 `MaxRAMPercentage=75.0` 会基于容器可见内存规划堆，但 Java 进程还有非堆内存，所以不能简单理解成“2 GiB 限制就有 1.5 GiB 业务对象空间”。生产仍需观察实际内存、线程数和 OOM 日志。
 
-## 5. 三个文件合并后的结果
+## 5. 基础文件合并后的结果
 
 ### 本地正常启动
 

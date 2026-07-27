@@ -110,15 +110,16 @@ flowchart LR
 
 因此，不要因为本地环境中存在 `mysql` 和 `redis` 服务，就误以为生产环境也会启动它们。
 
-## 4. 为什么有三个 Compose 文件
+## 4. 为什么有三个基础 Compose 文件
 
-三个文件并不是三套完全独立的配置，而是“公共配置 + 环境差异”：
+三个基础文件并不是三套完全独立的配置，而是“公共配置 + 环境差异”；需要公司 Maven 配置时，再叠加一个只影响构建过程的可选文件：
 
 | 文件 | 职责 | 是否单独使用 |
 | --- | --- | --- |
 | `compose.yaml` | 后端和维护任务共用的镜像、安全、日志、构建配置 | 否 |
 | `compose.local.yaml` | 本地 MySQL、Redis、端口、网络和命名卷 | 与公共文件组合 |
 | `compose.prod.yaml` | 生产宿主机网络、真实目录和资源限制 | 与公共文件组合 |
+| `compose.maven-settings.yaml` | 把公司 Maven `settings.xml` 作为构建 secret 传入 | 与上述任一环境组合，可选 |
 
 本地命令中的两个 `-f` 表示按顺序加载并合并文件：
 
@@ -133,6 +134,7 @@ docker compose --env-file .env \
 ```text
 公共 backend 配置 + 本地 backend 配置 = 本地最终 backend 配置
 公共 backend 配置 + 生产 backend 配置 = 生产最终 backend 配置
+公共配置 + 环境配置 + Maven secret 配置 = 使用公司 Maven 仓库的构建配置
 ```
 
 后面的文件负责补充或覆盖前面的文件。这样，安全选项、日志轮转等公共内容只需维护一次。
@@ -185,6 +187,7 @@ spring:
 | `compose.yaml` | 所有使用 Compose 的人员 | 定义公共服务配置 |
 | `compose.local.yaml` | 本地开发人员 | 定义完整的本地依赖环境 |
 | `compose.prod.yaml` | 生产运维人员 | 定义后端如何接入宿主机现有资源 |
+| `compose.maven-settings.yaml` | 镜像构建人员 | 从工作区外临时挂载公司 Maven `settings.xml` |
 | `.env.example` | 本地开发人员 | 本地变量模板 |
 | `.env.prod.example` | 生产运维人员 | 生产变量结构示例，不含真实凭据 |
 | `docker/frontend/Dockerfile.example` | 前端开发人员 | 应复制到独立 Vue 仓库的多阶段构建模板 |
@@ -199,4 +202,5 @@ spring:
 - `docker compose down` 默认保留命名卷；`down -v` 会删除当前 Compose 项目的命名卷。
 - 不要把宿主机现有 MySQL 数据目录直接挂进本项目的本地 MySQL 容器。
 - 生产环境的真实变量文件应放在 Git 工作区之外。
+- 公司 Maven `settings.xml` 及其凭据不得复制到仓库或构建参数中。
 - 修改配置后先看渲染结果，再启动容器。

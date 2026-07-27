@@ -21,21 +21,48 @@
 - `compose.yaml`：后端与按需维护任务的公共安全、日志和构建配置。
 - `compose.local.yaml`：本地 MySQL、Redis、持久卷和端口。
 - `compose.prod.yaml`：Ubuntu 生产覆盖，只连接宿主机服务和真实数据目录。
+- `compose.maven-settings.yaml`：可选构建覆盖，把公司 Maven `settings.xml` 作为 BuildKit secret 传给后端构建阶段。
 - `.env.example`：可直接复制的本地变量模板。
 - `.env.prod.example`：生产变量结构示例，不得直接作为真实凭据使用。
 - `docker/nginx/picture-zip-upload.conf.example`：应合并进现有宿主机 Nginx 的 upstream/location 示例。
 
 当前后端、Maven、MySQL 和 Redis 示例同时固定了可读版本标签和已验证的 manifest digest。正式发布时应把这些镜像同步到公司镜像仓库，再将变量替换为公司仓库内的不可变引用。
 
-若公司网络必须通过 Maven 仓库代理，优先在 CI 中通过受控 `settings.xml` 和 BuildKit secret 配置，不要把仓库账号、密码写入 `MAVEN_BUILD_OPTS`、Dockerfile 或 Git。Dockerfile 支持可选的 `maven_settings` secret：
+若公司网络必须通过 Maven 仓库代理，优先通过受控 `settings.xml` 和 BuildKit secret 配置，不要把仓库账号、密码写入 `MAVEN_BUILD_OPTS`、Dockerfile、`.env` 内容或 Git。先把绝对路径写入未纳入 Git 的 `.env`：
+
+```dotenv
+MAVEN_SETTINGS_FILE=/secure/path/settings.xml
+```
+
+本地构建时额外加载 Maven secret 覆盖文件：
+
+```bash
+BUILDX_BAKE_ENTITLEMENTS_FS=0 \
+docker compose --env-file .env \
+  -f compose.yaml -f compose.local.yaml -f compose.maven-settings.yaml \
+  build backend
+```
+
+也可以在启动时构建：
+
+```bash
+BUILDX_BAKE_ENTITLEMENTS_FS=0 \
+docker compose --env-file .env \
+  -f compose.yaml -f compose.local.yaml -f compose.maven-settings.yaml \
+  up -d --build
+```
+
+当前 Docker Compose v5 使用 Buildx Bake，并会拦截工作区外的文件读取。上面的 `BUILDX_BAKE_ENTITLEMENTS_FS=0` 只对当前命令关闭 Bake 的额外确认；Compose 仍只会读取配置中明确指定的 `MAVEN_SETTINGS_FILE`。只应对本仓库中经过确认的 Compose 文件使用该方式，不要把它永久导出为全局环境变量。较早版本如果没有这层检查，可以省略此前缀。
+
+`compose.maven-settings.yaml` 同时支持 `backend` 和按需执行的 `maintenance` 镜像构建。启用该文件但没有设置 `MAVEN_SETTINGS_FILE` 时，Compose 会在渲染配置阶段直接报错；路径不存在或无法读取时，构建会失败。`settings.xml` 只在 Maven 构建步骤临时挂载，不会复制进镜像层，也不会成为运行中容器的 secret。`MAVEN_BUILD_OPTS` 只预留给不含凭据的 JVM 网络参数。
+
+若不使用 Compose，也可以直接执行：
 
 ```bash
 docker build \
   --secret id=maven_settings,src=/secure/path/settings.xml \
   --tag picture-zip-upload:release .
 ```
-
-`settings.xml` 只在 Maven 构建步骤临时挂载，不会复制进镜像层。`MAVEN_BUILD_OPTS` 只预留给不含凭据的 JVM 网络参数。
 
 ## 3. 本地完整环境
 

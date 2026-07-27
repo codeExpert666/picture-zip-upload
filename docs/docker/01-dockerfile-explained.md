@@ -111,6 +111,25 @@ docker build \
   --tag picture-zip-upload:local .
 ```
 
+通过 Compose 构建时，先在未纳入 Git 的 `.env` 中设置：
+
+```dotenv
+MAVEN_SETTINGS_FILE=/secure/path/settings.xml
+```
+
+然后额外加载 `compose.maven-settings.yaml`：
+
+```bash
+BUILDX_BAKE_ENTITLEMENTS_FS=0 \
+docker compose --env-file .env \
+  -f compose.yaml -f compose.local.yaml -f compose.maven-settings.yaml \
+  build backend
+```
+
+Compose secret 名称 `maven_settings` 必须与 Dockerfile 中的 `id=maven_settings` 一致。Compose 读取宿主机文件，BuildKit 只在该条 `RUN` 执行期间把它挂载为 `/tmp/maven-settings.xml`。
+
+Docker Compose v5 使用 Buildx Bake 时，会要求授权读取工作区外的 secret 文件。这里把 `BUILDX_BAKE_ENTITLEMENTS_FS=0` 只设置在单条可信构建命令上，避免永久关闭该确认机制。
+
 这个文件只在当前构建步骤中可见，不会被 `COPY` 进镜像，也不会保留在最终镜像层中。`required=false` 表示不提供 secret 时仍可使用 Maven 默认配置构建。
 
 #### 执行 Maven 打包
