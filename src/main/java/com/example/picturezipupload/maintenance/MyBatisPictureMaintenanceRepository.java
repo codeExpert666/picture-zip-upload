@@ -25,8 +25,8 @@ public class MyBatisPictureMaintenanceRepository implements PictureMaintenanceRe
     }
 
     @Override
-    public List<PictureRecord> findRecordsMissingMetadata(String businessArea, int limit) {
-        return mapper.findRecordsMissingMetadata(tableResolver.resolve(businessArea), limit);
+    public List<PictureRecord> findRecordsMissingMetadata(String businessArea, String afterVoiceCode, int limit) {
+        return mapper.findRecordsMissingMetadata(tableResolver.resolve(businessArea), afterVoiceCode, limit);
     }
 
     @Override

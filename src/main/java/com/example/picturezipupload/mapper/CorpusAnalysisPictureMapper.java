@@ -36,9 +36,10 @@ public interface CorpusAnalysisPictureMapper {
                                @Param("duplicateImportMetadata") DuplicateImportMetadataParam duplicateImportMetadata);
 
     /**
-     * 查询缺少新增元数据的历史记录，用于维护脚本回填。
+     * 按 {@code voice_code} 游标查询缺少新增元数据的历史记录，用于维护脚本回填。
      */
     List<PictureRecord> findRecordsMissingMetadata(@Param("tableName") String tableName,
+                                                   @Param("afterVoiceCode") String afterVoiceCode,
                                                    @Param("limit") int limit);
 
     /**

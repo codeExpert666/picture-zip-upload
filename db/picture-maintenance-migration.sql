@@ -11,6 +11,10 @@ ALTER TABLE medical_corpus_analysis_picture
     ADD COLUMN original_zip_name varchar(255) DEFAULT NULL,
     ADD COLUMN operator varchar(50) DEFAULT NULL;
 
--- Run scripts/backfill-existing-picture-records.sh and resolve conflicts before adding this index.
+-- Add a non-unique lookup index before backfill. The backfill queries content_sha256 once per valid image.
+-- If the columns above already exist in production, run only this ALTER TABLE statement at this stage.
 ALTER TABLE medical_corpus_analysis_picture
-    ADD UNIQUE KEY uk_picture_sha256 (content_sha256);
+    ADD KEY idx_picture_content_sha256 (content_sha256);
+
+-- Stop here. Run scripts/backfill-existing-picture-records.sh and resolve all hash conflicts first.
+-- Only after conflict cleanup, execute db/picture-maintenance-finalize-index.sql.

@@ -7,9 +7,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -87,70 +90,94 @@ public class PictureMaintenanceService {
     /**
      * 回填历史记录新增字段。
      *
-     * <p>定位文件时优先使用历史 {@code file_path}，其次用 {@code file_URL} 反解，最后才按
-     * {@code legacyRoot + filename/extname} 做唯一匹配；回填过程不修改标注状态。</p>
+     * <p>定位文件时只信任历史 {@code file_path}，无效路径计入 missing；回填过程按
+     * {@code voice_code} 游标单线程推进，不修改标注状态。</p>
      */
-    public PictureMaintenanceReport backfillExistingRecords(String businessArea, Path legacyRoot, String operator,
-                                                            String batchId, int limit, boolean dryRun)
+    public PictureBackfillResult backfillExistingRecords(PictureBackfillRequest request,
+                                                         PictureBackfillProgressListener progressListener)
             throws IOException {
+        Objects.requireNonNull(request, "request");
+        Objects.requireNonNull(progressListener, "progressListener");
         PictureMaintenanceReport report = new PictureMaintenanceReport();
-        for (PictureRecord record : maintenanceRepository.findRecordsMissingMetadata(businessArea, limit)) {
-            report.recordScanned();
-            Optional<Path> path = resolveExistingRecordPath(record, legacyRoot);
-            if (path.isEmpty() || !Files.isRegularFile(path.get())) {
-                report.recordMissing();
-                continue;
+        String cursor = request.afterVoiceCode();
+        int processed = 0;
+        int lastReported = 0;
+        boolean exhausted = false;
+
+        while (processed < request.limit()) {
+            int queryLimit = Math.min(request.batchSize(), request.limit() - processed);
+            List<PictureRecord> records = maintenanceRepository.findRecordsMissingMetadata(
+                    request.businessArea(), cursor, queryLimit);
+            if (records.isEmpty()) {
+                exhausted = true;
+                break;
             }
-            Optional<PictureFileMetadata> metadata = fileInspector.inspectImage(path.get());
-            if (metadata.isEmpty()) {
-                report.recordInvalid();
-                continue;
+            for (PictureRecord record : records) {
+                processBackfillRecord(request, record, report);
+                processed++;
+                cursor = record.getVoiceCode();
+                if (processed - lastReported >= request.progressInterval()) {
+                    progressListener.onProgress(new PictureBackfillProgress(processed, cursor, report));
+                    lastReported = processed;
+                }
             }
-            Optional<PictureRecord> existing = pictureRepository.findByContentSha256(
-                    businessArea, metadata.get().contentSha256());
-            if (existing.isPresent() && !record.getVoiceCode().equals(existing.get().getVoiceCode())) {
-                report.recordConflicted();
-                continue;
+            if (processed > lastReported) {
+                progressListener.onProgress(new PictureBackfillProgress(processed, cursor, report));
+                lastReported = processed;
             }
-            if (!dryRun) {
-                maintenanceRepository.updateBackfillMetadata(
-                        businessArea,
-                        record.getVoiceCode(),
-                        metadata.get().contentSha256(),
-                        metadata.get().fileSize(),
-                        batchId,
-                        "LEGACY_BACKFILL",
-                        operator,
-                        LocalDateTime.now());
+            if (records.size() < queryLimit) {
+                exhausted = true;
+                break;
             }
-            report.recordBackfilled();
         }
-        return report;
+        if (!exhausted && processed == request.limit()) {
+            exhausted = maintenanceRepository.findRecordsMissingMetadata(request.businessArea(), cursor, 1).isEmpty();
+        }
+        return new PictureBackfillResult(report, cursor, exhausted);
     }
 
-    private Optional<Path> resolveExistingRecordPath(PictureRecord record, Path legacyRoot) throws IOException {
-        if (record.getFilePath() != null && !record.getFilePath().isBlank()) {
-            Path filePath = Path.of(record.getFilePath()).toAbsolutePath().normalize();
-            if (Files.isRegularFile(filePath)) {
-                return Optional.of(filePath);
-            }
+    private void processBackfillRecord(PictureBackfillRequest request, PictureRecord record,
+                                       PictureMaintenanceReport report) throws IOException {
+        report.recordScanned();
+        Optional<Path> path = resolveExistingRecordPath(record);
+        if (path.isEmpty()) {
+            report.recordMissing();
+            return;
         }
-        Optional<Path> pathFromUrl = pathResolver.resolveFileUrl(record.getFileUrl());
-        if (pathFromUrl.isPresent() && Files.isRegularFile(pathFromUrl.get())) {
-            return pathFromUrl;
+        Optional<PictureFileMetadata> metadata = fileInspector.inspectImage(path.get());
+        if (metadata.isEmpty()) {
+            report.recordInvalid();
+            return;
         }
-        if (legacyRoot == null || record.getFilename() == null || record.getExtname() == null) {
+        Optional<PictureRecord> existing = pictureRepository.findByContentSha256(
+                request.businessArea(), metadata.get().contentSha256());
+        if (existing.isPresent() && !record.getVoiceCode().equals(existing.get().getVoiceCode())) {
+            report.recordConflicted();
+            return;
+        }
+        if (!request.dryRun()) {
+            maintenanceRepository.updateBackfillMetadata(
+                    request.businessArea(),
+                    record.getVoiceCode(),
+                    metadata.get().contentSha256(),
+                    metadata.get().fileSize(),
+                    request.batchId(),
+                    "LEGACY_BACKFILL",
+                    request.operator(),
+                    LocalDateTime.now());
+        }
+        report.recordBackfilled();
+    }
+
+    private Optional<Path> resolveExistingRecordPath(PictureRecord record) {
+        if (record.getFilePath() == null || record.getFilePath().isBlank()) {
             return Optional.empty();
         }
-        String targetName = record.getFilename() + "." + record.getExtname();
-        try (Stream<Path> paths = Files.walk(legacyRoot.toAbsolutePath().normalize())) {
-            // 兜底匹配必须唯一，避免同名图片散落在多级目录时误回填。
-            java.util.List<Path> matches = paths
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().equals(targetName))
-                    .limit(2)
-                    .toList();
-            return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+        try {
+            Path filePath = Path.of(record.getFilePath()).toAbsolutePath().normalize();
+            return Files.isRegularFile(filePath) ? Optional.of(filePath) : Optional.empty();
+        } catch (InvalidPathException ex) {
+            return Optional.empty();
         }
     }
 }

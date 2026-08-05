@@ -6,16 +6,17 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 APP_JAR="${APP_JAR:-${PROJECT_DIR}/target/picture-zip-upload-0.0.1-SNAPSHOT.jar}"
 
 # 将脚本友好的参数名转换成 Spring Boot 配置参数。
+# 旧记录回填只使用数据库中的 file_path，不再扫描 legacy-root 或反解 file_URL。
 translate_args() {
   local translated=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --business-area|--operator|--batch-id|--legacy-root|--limit|--dry-run)
+      --business-area|--operator|--batch-id|--limit|--batch-size|--progress-interval|--after-voice-code|--checkpoint-file|--dry-run)
         local key="${1#--}"
         translated+=("--picture-maintenance.${key}=$2")
         shift 2
         ;;
-      --business-area=*|--operator=*|--batch-id=*|--legacy-root=*|--limit=*|--dry-run=*)
+      --business-area=*|--operator=*|--batch-id=*|--limit=*|--batch-size=*|--progress-interval=*|--after-voice-code=*|--checkpoint-file=*|--dry-run=*)
         local key="${1%%=*}"
         local value="${1#*=}"
         key="${key#--}"

@@ -5,6 +5,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
@@ -19,6 +20,12 @@ import org.springframework.scheduling.annotation.EnableAsync;
 public class PictureZipUploadApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(PictureZipUploadApplication.class, args);
+        ConfigurableApplicationContext context = SpringApplication.run(PictureZipUploadApplication.class, args);
+        boolean maintenanceEnabled = context.getEnvironment().getProperty(
+                "picture-maintenance.enabled", Boolean.class, false);
+        if (maintenanceEnabled) {
+            int exitCode = SpringApplication.exit(context);
+            System.exit(exitCode);
+        }
     }
 }

@@ -11,9 +11,9 @@ import java.util.List;
 public interface PictureMaintenanceRepository {
 
     /**
-     * 分批查询缺少内容哈希或文件大小的历史记录。
+     * 按 {@code voice_code} 游标分批查询缺少内容哈希或文件大小的历史记录。
      */
-    List<PictureRecord> findRecordsMissingMetadata(String businessArea, int limit);
+    List<PictureRecord> findRecordsMissingMetadata(String businessArea, String afterVoiceCode, int limit);
 
     /**
      * 只回填新增元数据和本次维护批次信息，不修改标注状态和历史访问路径。

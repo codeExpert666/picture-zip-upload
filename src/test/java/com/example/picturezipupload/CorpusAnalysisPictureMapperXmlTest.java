@@ -77,10 +77,18 @@ class CorpusAnalysisPictureMapperXmlTest {
             PictureRecord missingMetadata = record("voice-2", "missing.png", null, 0L, now.plusMinutes(2));
             mapper.insert(TABLE_NAME, missingMetadata);
 
-            List<PictureRecord> recordsMissingMetadata = mapper.findRecordsMissingMetadata(TABLE_NAME, 10);
+            PictureRecord laterMissingMetadata = record("voice-3", "later.png", null, 0L, now.plusMinutes(3));
+            mapper.insert(TABLE_NAME, laterMissingMetadata);
+
+            List<PictureRecord> recordsMissingMetadata = mapper.findRecordsMissingMetadata(TABLE_NAME, null, 10);
             assertThat(recordsMissingMetadata)
                     .extracting(PictureRecord::getVoiceCode)
-                    .contains("voice-2");
+                    .containsExactly("voice-2", "voice-3");
+
+            List<PictureRecord> recordsAfterCursor = mapper.findRecordsMissingMetadata(TABLE_NAME, "voice-2", 10);
+            assertThat(recordsAfterCursor)
+                    .extracting(PictureRecord::getVoiceCode)
+                    .containsExactly("voice-3");
 
             mapper.updateBackfillMetadata(TABLE_NAME, "voice-2", backfillMetadata(now.plusMinutes(3)));
 

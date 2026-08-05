@@ -80,16 +80,21 @@ for /f %i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"
 
 历史公司表如果尚未新增字段，应先执行 `db/picture-maintenance-migration.sql` 中的字段扩容和新增字段语句。
 
-建议分两步执行：
+建议分三步执行：
 
 1. 先执行 `MODIFY file_URL/file_path` 和 `ADD COLUMN ...`。
-2. 等旧记录回填完成、冲突处理完成后，再添加 `uk_picture_sha256` 唯一索引。
+2. 回填前添加普通索引 `idx_picture_content_sha256`，避免每张图片按哈希查询时反复全表扫描。
+3. 等旧记录回填完成、冲突处理完成后，执行 `db/picture-maintenance-finalize-index.sql`，把普通索引替换成 `uk_picture_sha256` 唯一索引。
+
+如果生产表已经存在新增字段、只是缺少哈希索引，不要重复执行 `ADD COLUMN`；只执行 `db/picture-maintenance-migration.sql` 中添加 `idx_picture_content_sha256` 的那条 `ALTER TABLE`。
+
+生产执行索引 DDL 前，应由 DBA 根据实际 MySQL 版本确认锁表和在线 DDL 行为，并安排在低流量窗口。
 
 迁移原因：
 
 - `file_URL` 和 `file_path` 需要支持多级目录和中文路径，建议扩到 `varchar(1024)`。
 - `content_sha256` 初期应允许为空，避免历史数据未回填前无法上线。
-- 唯一索引应在回填冲突处理后再加，避免历史重复图片直接阻塞迁移。
+- 回填阶段先使用普通索引；唯一索引应在冲突处理后再加，避免历史重复图片直接阻塞迁移。
 
 ### 3. 配置静态资源目录
 
@@ -150,13 +155,13 @@ mvn -DskipTests package
 严格建议按以下顺序执行：
 
 1. 备份目标业务表。
-2. 执行字段迁移，先不要添加唯一索引。
+2. 执行字段迁移，并添加 `content_sha256` 普通查询索引，先不要添加唯一索引。
 3. 部署包含额外静态目录配置的应用版本。
 4. dry-run 执行旧记录回填脚本。
 5. 确认旧记录 dry-run 报告。
 6. 正式执行旧记录回填脚本。
 7. 处理内容哈希冲突。
-8. 添加 `content_sha256` 唯一索引。
+8. 执行 `db/picture-maintenance-finalize-index.sql`，添加 `content_sha256` 唯一索引。
 9. dry-run 执行新目录导入脚本。
 10. 确认新目录 dry-run 报告。
 11. 正式执行新目录导入脚本。
@@ -168,37 +173,50 @@ mvn -DskipTests package
 
 ### 基本命令
 
-dry-run：
+先用最多 `1000` 条记录做 dry-run，验证连接、路径、图片格式和单批耗时：
 
 ```bash
 scripts/backfill-existing-picture-records.sh \
   --business-area medical \
   --operator data-team \
-  --batch-id legacy-backfill-20260702 \
+  --batch-id legacy-backfill-dry-run-20260805 \
+  --limit 1000 \
+  --batch-size 1000 \
+  --progress-interval 100 \
   --dry-run true
 ```
 
-正式执行：
+正式执行时，`limit` 应大于当前待回填记录数；下面的 `500000` 是针对约 30 万条记录预留的上限，不会一次性加载到内存：
 
 ```bash
 scripts/backfill-existing-picture-records.sh \
   --business-area medical \
   --operator data-team \
-  --batch-id legacy-backfill-20260702 \
+  --batch-id legacy-backfill-20260805 \
+  --limit 500000 \
+  --batch-size 1000 \
+  --progress-interval 100 \
   --dry-run false
 ```
 
-带历史目录兜底：
+任务始终单线程执行。每次只按 `voice_code` 主键游标查询一个批次，并每处理 `progress-interval` 条记录输出进度、保存累计报告和最后游标。
+
+### 脱离 SSH 会话运行
+
+输出重定向只保存日志，不会让进程脱离 SSH 会话。服务器允许使用 `tmux` 时，可以在项目根目录执行：
 
 ```bash
-scripts/backfill-existing-picture-records.sh \
-  --business-area medical \
-  --legacy-root /data/corpusImages \
-  --operator data-team \
-  --batch-id legacy-backfill-20260702 \
-  --limit 1000 \
-  --dry-run true
+mkdir -p logs
+tmux new-session -d -s picture-backfill \
+  'scripts/backfill-existing-picture-records.sh --business-area medical --operator data-team --batch-id legacy-backfill-20260805 --limit 500000 --batch-size 1000 --progress-interval 100 --dry-run false > logs/backfill-20260805.log 2>&1'
+
+tmux ls
+tail -f logs/backfill-20260805.log
 ```
+
+如果公司提供 systemd、作业平台或后台容器，应优先使用公司已有的受管运行方式。
+
+Linux 服务器资源紧张时，可在确认命令可用后给 Java 任务降低 CPU 和磁盘调度优先级，例如在脚本命令前加 `nice -n 10 ionice -c2 -n7`。使用 Compose 时可通过 `MAINTENANCE_CPUS` 和 `MAINTENANCE_MEMORY_LIMIT` 设置资源上限；仍应安排在低流量时段运行。
 
 ### 参数说明
 
@@ -207,19 +225,32 @@ scripts/backfill-existing-picture-records.sh \
 | `--business-area` | 是 | 业务领域编码，会通过 `picture-upload.business-area-tables` 解析到具体图片表 |
 | `--operator` | 否 | 操作人，写入 `operator` 字段 |
 | `--batch-id` | 是 | 本次维护批次号，写入 `upload_id` 字段 |
-| `--legacy-root` | 否 | 当 `file_path` 和 `file_URL` 都无法定位文件时，按 `filename.extname` 兜底查找的目录 |
-| `--limit` | 否 | 单次最多处理的旧记录数量，默认 `1000` |
+| `--limit` | 否 | 同一检查点最多处理的旧记录总数，默认 `1000`；全量任务应设置为大于待回填数量的值 |
+| `--batch-size` | 否 | 每次按主键游标从数据库读取的记录数，默认 `1000` |
+| `--progress-interval` | 否 | 每处理多少条记录输出进度并保存检查点，默认 `100` |
+| `--after-voice-code` | 否 | 新批次首次执行时，从指定 `voice_code` 之后开始；检查点已存在时必须与首次值一致 |
+| `--checkpoint-file` | 否 | 显式指定检查点文件；默认位于 `PICTURE_UPLOAD_WORK_ROOT/maintenance/` |
 | `--dry-run` | 否 | 是否只统计不写库，默认应用配置为 `true` |
 
-### 文件定位顺序
+### 文件定位规则
 
-旧记录回填按以下顺序定位本地文件：
+旧记录回填只使用数据库中已有的 `file_path`：
 
-1. 优先使用数据库已有 `file_path`。
-2. 如果 `file_path` 不可用，尝试用 `file_URL` 结合静态资源映射反解本地路径。
-3. 如果仍不可用，且传入了 `--legacy-root`，则在该目录下按 `filename + extname` 查找。
+- `file_path` 为空、格式非法或对应文件不存在时，记录计入 `missing`。
+- 不通过 `file_URL` 反解路径。
+- 不递归扫描历史目录按文件名兜底，避免少数异常记录反复遍历大目录。
 
-第三种兜底只有唯一匹配时才会使用。如果同名文件有多个，脚本会跳过该记录，避免误回填。
+### 检查点与恢复
+
+默认检查点文件名由 `business-area`、`batch-id` 和 dry-run 模式组成。检查点会保存：
+
+- 最后处理的 `voice_code`。
+- `scanned`、`backfilled`、`invalid`、`missing`、`conflicted` 累计数量。
+- 本任务的 `limit`、`batch-id`、`operator`、业务领域和 dry-run 模式。
+
+任务异常中断后，使用完全相同的 `batch-id`、`operator`、`limit`、`after-voice-code` 和 dry-run 模式重新执行即可恢复。检查点与当前参数不一致时脚本会拒绝启动，避免把两个任务的进度混在一起。
+
+如果日志提示已经达到 `limit` 但仍有候选记录，应使用新的 `batch-id`，并把日志中的最后游标传给 `--after-voice-code`。如果检查点标记数据已经耗尽，重复执行同一命令不会再次扫描。
 
 ### 回填字段
 
@@ -332,7 +363,7 @@ scripts/import-direct-picture-directory.sh \
 
 ## 报告字段说明
 
-脚本结束后会在日志中输出 `PictureMaintenanceReport`，字段含义如下：
+旧记录回填会按 `progress-interval` 周期输出累计进度，脚本结束后还会输出最终 `PictureMaintenanceReport`。字段含义如下：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -344,7 +375,7 @@ scripts/import-direct-picture-directory.sh \
 | `missing` | 旧记录无法定位到本地文件的数量 |
 | `conflicted` | 旧记录计算出的哈希与其他记录冲突的数量 |
 
-dry-run 模式下，`inserted` 和 `backfilled` 表示如果正式执行会处理的数量，不代表已经写库。
+dry-run 模式下，`inserted` 和 `backfilled` 表示如果正式执行会处理的数量，不代表已经写库。旧记录 dry-run 只适合验证样本、路径和吞吐；由于它不会把本次计算出的哈希写库，也不会跨记录持久化临时哈希集合，因此不能替代正式回填阶段的重复哈希冲突识别。
 
 ## 执行后校验
 
@@ -408,7 +439,16 @@ curl -I 'http://server-host/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5
 
 ### dry-run 数量和正式执行数量不同
 
-正式执行期间如果其他任务也在写入图片表，可能出现并发重复。脚本会依赖数据库唯一索引兜底，并把冲突计入 `duplicated` 或 `conflicted`。
+旧记录 dry-run 不写入本次计算出的哈希，因此同一批历史空哈希记录之间的重复内容可能要到正式回填时才表现为 `conflicted`。正式执行期间如果其他任务也在写入图片表，统计也可能变化。大规模正式回填应安排在低写入时段，并保持只有一个维护任务运行。
+
+### 回填启动后长时间没有最终报告
+
+先查看周期性“图片回填进度”日志和检查点文件更新时间。如果只有启动日志、没有任何进度：
+
+1. 用 `SHOW INDEX FROM medical_corpus_analysis_picture;` 确认存在 `idx_picture_content_sha256` 普通索引或最终唯一索引。
+2. 抽样确认数据库中的 `file_path` 在运行脚本的宿主机或容器内确实是普通文件。
+3. 检查进程、CPU、磁盘 IO、数据库慢查询和系统 OOM 日志。
+4. 确认脚本运行的 JAR 是修改后重新构建的版本。
 
 ### 旧记录出现 `conflicted`
 
@@ -420,12 +460,12 @@ curl -I 'http://server-host/api/pictures/files/%E7%97%85%E7%90%86%20%E5%9B%BE%E5
 
 ### 旧记录出现 `missing`
 
-说明脚本无法通过 `file_path`、`file_URL` 或 `legacy-root + filename/extname` 定位文件。建议人工检查：
+说明脚本无法通过 `file_path` 定位普通文件。建议人工检查：
 
 - 历史 `file_path` 是否过期。
-- 静态资源目录是否迁移过。
+- 脚本在容器内运行时，宿主机路径是否挂载成相同的容器路径。
 - 文件是否被删除。
-- `filename` 和 `extname` 是否与真实文件名一致。
+- 路径中是否存在非法字符或权限问题。
 
 ## 回滚建议
 
@@ -447,5 +487,7 @@ WHERE upload_id = 'direct-import-20260702';
 - 脚本不根据用户输入直接拼接表名，业务领域必须通过后端白名单解析。
 - 脚本不复制大图片，避免额外占用服务器磁盘。
 - 脚本不修改旧记录标注状态。
+- 旧记录回填只读取数据库中的 `file_path`，不会递归扫描历史图片目录。
+- 旧记录回填按主键游标单线程处理；同一时间只运行一个维护任务。
 - 脚本默认 dry-run，正式执行必须显式设置 `--dry-run false`。
 - 新目录导入只引用正式图片根目录或 `--source-root` 覆盖目录下的安全相对路径。

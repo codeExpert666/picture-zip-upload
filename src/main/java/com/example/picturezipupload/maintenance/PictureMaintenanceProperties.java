@@ -36,11 +36,6 @@ public class PictureMaintenanceProperties {
     private Path sourceRoot;
 
     /**
-     * 旧记录回填模式下按文件名兜底查找的历史图片根目录。
-     */
-    private Path legacyRoot;
-
-    /**
      * 新目录导入模式下写入 {@code file_URL} 的 URL 前缀；未配置时使用 {@code picture-upload.public-url-prefix}。
      */
     private String publicUrlPrefix;
@@ -56,9 +51,29 @@ public class PictureMaintenanceProperties {
     private String batchId;
 
     /**
-     * 旧记录回填每次最多读取的记录数。
+     * 旧记录回填单次执行最多处理的记录数。
      */
     private int limit = 1000;
+
+    /**
+     * 旧记录回填每次按主键游标查询的记录数。
+     */
+    private int batchSize = 1000;
+
+    /**
+     * 旧记录回填每处理多少条记录输出进度并保存一次检查点。
+     */
+    private int progressInterval = 100;
+
+    /**
+     * 新任务首次执行时跳过的最后一个 {@code voice_code}。
+     */
+    private String afterVoiceCode;
+
+    /**
+     * 旧记录回填检查点文件；未配置时写入上传工作目录的 maintenance 子目录。
+     */
+    private Path checkpointFile;
 
     public boolean isEnabled() {
         return enabled;
@@ -100,14 +115,6 @@ public class PictureMaintenanceProperties {
         this.sourceRoot = sourceRoot;
     }
 
-    public Path getLegacyRoot() {
-        return legacyRoot;
-    }
-
-    public void setLegacyRoot(Path legacyRoot) {
-        this.legacyRoot = legacyRoot;
-    }
-
     public String getPublicUrlPrefix() {
         return publicUrlPrefix;
     }
@@ -138,5 +145,37 @@ public class PictureMaintenanceProperties {
 
     public void setLimit(int limit) {
         this.limit = limit;
+    }
+
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+    }
+
+    public int getProgressInterval() {
+        return progressInterval;
+    }
+
+    public void setProgressInterval(int progressInterval) {
+        this.progressInterval = progressInterval;
+    }
+
+    public String getAfterVoiceCode() {
+        return afterVoiceCode;
+    }
+
+    public void setAfterVoiceCode(String afterVoiceCode) {
+        this.afterVoiceCode = afterVoiceCode;
+    }
+
+    public Path getCheckpointFile() {
+        return checkpointFile;
+    }
+
+    public void setCheckpointFile(Path checkpointFile) {
+        this.checkpointFile = checkpointFile;
     }
 }

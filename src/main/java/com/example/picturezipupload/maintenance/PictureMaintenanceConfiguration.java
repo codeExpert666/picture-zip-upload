@@ -21,10 +21,10 @@ public class PictureMaintenanceConfiguration {
     }
 
     /**
-     * 同时纳入正式图片目录和额外静态目录，供旧记录 URL 反解使用。
+     * 为新目录导入生成分段编码后的静态资源 URL。
      */
     @Bean
-    public StaticPicturePathResolver staticPicturePathResolver(PictureUploadProperties properties) {
-        return PictureMaintenanceRunner.pathResolver(properties);
+    public StaticPicturePathResolver staticPicturePathResolver() {
+        return new StaticPicturePathResolver();
     }
 }

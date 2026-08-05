@@ -42,6 +42,20 @@ public class PictureMaintenanceReport {
      */
     private long conflicted;
 
+    public PictureMaintenanceReport() {
+    }
+
+    PictureMaintenanceReport(long scanned, long inserted, long duplicated, long backfilled,
+                             long invalid, long missing, long conflicted) {
+        this.scanned = scanned;
+        this.inserted = inserted;
+        this.duplicated = duplicated;
+        this.backfilled = backfilled;
+        this.invalid = invalid;
+        this.missing = missing;
+        this.conflicted = conflicted;
+    }
+
     public long getScanned() {
         return scanned;
     }
@@ -96,6 +110,21 @@ public class PictureMaintenanceReport {
 
     void recordConflicted() {
         conflicted++;
+    }
+
+    PictureMaintenanceReport copy() {
+        return new PictureMaintenanceReport(scanned, inserted, duplicated, backfilled, invalid, missing, conflicted);
+    }
+
+    PictureMaintenanceReport plus(PictureMaintenanceReport other) {
+        return new PictureMaintenanceReport(
+                scanned + other.scanned,
+                inserted + other.inserted,
+                duplicated + other.duplicated,
+                backfilled + other.backfilled,
+                invalid + other.invalid,
+                missing + other.missing,
+                conflicted + other.conflicted);
     }
 
     @Override

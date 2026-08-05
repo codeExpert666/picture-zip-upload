@@ -2,31 +2,15 @@ package com.example.picturezipupload.maintenance;
 
 import org.springframework.web.util.UriUtils;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /**
- * 静态图片路径和 URL 之间的转换工具。
+ * 将静态图片本地路径转换成 URL 的工具。
  */
 public class StaticPicturePathResolver {
-
-    private final Map<String, Path> rootPathsByUrlPrefix;
-
-    public StaticPicturePathResolver(Map<String, Path> rootPathsByUrlPrefix) {
-        Map<String, Path> normalized = new LinkedHashMap<>();
-        if (rootPathsByUrlPrefix != null) {
-            rootPathsByUrlPrefix.forEach((prefix, rootPath) -> normalized.put(
-                    normalizePrefix(prefix),
-                    rootPath.toAbsolutePath().normalize()));
-        }
-        this.rootPathsByUrlPrefix = Map.copyOf(normalized);
-    }
 
     /**
      * 将本地静态资源路径转换成可持久化到数据库的 URL。
@@ -47,57 +31,6 @@ public class StaticPicturePathResolver {
                 .map(segment -> UriUtils.encodePathSegment(segment, StandardCharsets.UTF_8))
                 .collect(Collectors.joining("/"));
         return normalizePrefix(publicUrlPrefix) + "/" + encodedPath;
-    }
-
-    /**
-     * 根据已配置的静态资源映射，把数据库中的 {@code file_URL} 反解回本地文件路径。
-     */
-    public Optional<Path> resolveFileUrl(String fileUrl) {
-        if (fileUrl == null || fileUrl.isBlank()) {
-            return Optional.empty();
-        }
-        String rawPath = rawPath(fileUrl.trim());
-        for (Map.Entry<String, Path> mapping : rootPathsByUrlPrefix.entrySet()) {
-            String prefix = mapping.getKey();
-            if (rawPath.equals(prefix)) {
-                return Optional.empty();
-            }
-            if (!rawPath.startsWith(prefix + "/")) {
-                continue;
-            }
-            String relativeRawPath = rawPath.substring(prefix.length() + 1);
-            Path relativePath = decodeRelativePath(relativeRawPath);
-            validateRelativePath(relativePath);
-            return Optional.of(mapping.getValue().resolve(relativePath).normalize());
-        }
-        return Optional.empty();
-    }
-
-    private static String rawPath(String value) {
-        try {
-            URI uri = URI.create(value);
-            if (uri.getScheme() != null) {
-                return uri.getRawPath();
-            }
-        } catch (IllegalArgumentException ignored) {
-            // Relative URLs with unescaped Chinese characters still work through the fallback path below.
-        }
-        int queryIndex = value.indexOf('?');
-        String path = queryIndex >= 0 ? value.substring(0, queryIndex) : value;
-        int fragmentIndex = path.indexOf('#');
-        return fragmentIndex >= 0 ? path.substring(0, fragmentIndex) : path;
-    }
-
-    private static Path decodeRelativePath(String relativeRawPath) {
-        if (relativeRawPath.isBlank()) {
-            throw new IllegalArgumentException("静态资源相对路径不能为空");
-        }
-        String[] segments = relativeRawPath.split("/");
-        Path relativePath = Path.of(UriUtils.decode(segments[0], StandardCharsets.UTF_8));
-        for (int index = 1; index < segments.length; index++) {
-            relativePath = relativePath.resolve(UriUtils.decode(segments[index], StandardCharsets.UTF_8));
-        }
-        return relativePath;
     }
 
     /**

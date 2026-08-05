@@ -162,7 +162,7 @@ picture-upload:
     medical: medical_corpus_analysis_picture
 ```
 
-`content_sha256` 是单张业务表内的判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。历史表迁移时先执行 `db/picture-maintenance-migration.sql` 中的字段扩容和新增字段语句，完成旧记录回填并处理冲突后，再添加 `uk_picture_sha256` 唯一索引。
+`content_sha256` 是单张业务表内的判重唯一索引。并发上传同一张图片时，数据库唯一索引是最终一致性防线。历史表迁移时先执行 `db/picture-maintenance-migration.sql` 中的字段扩容、新增字段和临时普通索引；完成旧记录回填并处理冲突后，再执行 `db/picture-maintenance-finalize-index.sql`，把普通索引替换成 `uk_picture_sha256` 唯一索引。
 
 ## 维护脚本
 

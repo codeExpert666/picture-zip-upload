@@ -2,6 +2,9 @@ package com.example.picturezipupload;
 
 import com.example.picturezipupload.domain.PictureRecord;
 import com.example.picturezipupload.maintenance.PictureFileInspector;
+import com.example.picturezipupload.maintenance.PictureBackfillProgress;
+import com.example.picturezipupload.maintenance.PictureBackfillRequest;
+import com.example.picturezipupload.maintenance.PictureBackfillResult;
 import com.example.picturezipupload.maintenance.PictureMaintenanceReport;
 import com.example.picturezipupload.maintenance.PictureMaintenanceRepository;
 import com.example.picturezipupload.maintenance.PictureMaintenanceService;
@@ -16,7 +19,6 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,8 +35,7 @@ class PictureMaintenanceServiceTest {
         Files.createDirectories(image.getParent());
         Files.write(image, tinyPng());
         InMemoryPictureRecordRepository pictureRepository = new InMemoryPictureRecordRepository();
-        PictureMaintenanceService service = service(pictureRepository, new InMemoryPictureMaintenanceRepository(),
-                Map.of("/api/pictures/files", sourceRoot));
+        PictureMaintenanceService service = service(pictureRepository, new InMemoryPictureMaintenanceRepository());
 
         PictureMaintenanceReport report = service.importDirectDirectory(
                 "medical", sourceRoot, "/api/pictures/files", "data-team", "direct-import-20260701", false);
@@ -61,12 +62,15 @@ class PictureMaintenanceServiceTest {
         InMemoryPictureMaintenanceRepository maintenanceRepository = new InMemoryPictureMaintenanceRepository();
         maintenanceRepository.recordsMissingMetadata.add(existing);
         InMemoryPictureRecordRepository pictureRepository = new InMemoryPictureRecordRepository();
-        PictureMaintenanceService service = service(pictureRepository, maintenanceRepository, Map.of());
+        PictureMaintenanceService service = service(pictureRepository, maintenanceRepository);
 
-        PictureMaintenanceReport report = service.backfillExistingRecords(
-                "medical", null, "data-team", "legacy-backfill-20260701", 100, false);
+        PictureBackfillResult result = service.backfillExistingRecords(
+                backfillRequest(100, 100, null, false), progress -> { });
+        PictureMaintenanceReport report = result.report();
 
         assertThat(report.getBackfilled()).isEqualTo(1);
+        assertThat(result.exhausted()).isTrue();
+        assertThat(result.lastVoiceCode()).isEqualTo("voice-1");
         assertThat(maintenanceRepository.backfilled).hasSize(1);
         BackfillUpdate update = maintenanceRepository.backfilled.get(0);
         assertThat(update.voiceCode()).isEqualTo("voice-1");
@@ -75,7 +79,7 @@ class PictureMaintenanceServiceTest {
     }
 
     @Test
-    void backfillsExistingRecordsByDecodingFileUrlWhenFilePathIsMissing() throws Exception {
+    void backfillUsesOnlyFilePathAndDoesNotFallBackToFileUrl() throws Exception {
         Path root = tempDir.resolve("images");
         Path image = root.resolve("病理").resolve("图片.png");
         Files.createDirectories(image.getParent());
@@ -85,24 +89,93 @@ class PictureMaintenanceServiceTest {
         existing.setFileUrl("/api/pictures/files/%E7%97%85%E7%90%86/%E5%9B%BE%E7%89%87.png");
         InMemoryPictureMaintenanceRepository maintenanceRepository = new InMemoryPictureMaintenanceRepository();
         maintenanceRepository.recordsMissingMetadata.add(existing);
-        PictureMaintenanceService service = service(new InMemoryPictureRecordRepository(), maintenanceRepository,
-                Map.of("/api/pictures/files", root));
+        PictureMaintenanceService service = service(new InMemoryPictureRecordRepository(), maintenanceRepository);
 
         PictureMaintenanceReport report = service.backfillExistingRecords(
-                "medical", null, "data-team", "legacy-backfill-20260701", 100, false);
+                backfillRequest(100, 100, null, false), progress -> { }).report();
 
-        assertThat(report.getBackfilled()).isEqualTo(1);
-        assertThat(maintenanceRepository.backfilled).hasSize(1);
+        assertThat(report.getBackfilled()).isZero();
+        assertThat(report.getMissing()).isEqualTo(1);
+        assertThat(maintenanceRepository.backfilled).isEmpty();
+    }
+
+    @Test
+    void backfillPagesByVoiceCodeAndReportsResumableProgress() throws Exception {
+        InMemoryPictureMaintenanceRepository maintenanceRepository = new InMemoryPictureMaintenanceRepository();
+        for (int index = 1; index <= 5; index++) {
+            Path image = tempDir.resolve("legacy").resolve("image-" + index + ".png");
+            Files.createDirectories(image.getParent());
+            Files.write(image, tinyPng());
+            PictureRecord record = new PictureRecord();
+            record.setVoiceCode("voice-" + index);
+            record.setFilePath(image.toString());
+            maintenanceRepository.recordsMissingMetadata.add(record);
+        }
+        PictureMaintenanceService service = service(
+                new InMemoryPictureRecordRepository(), maintenanceRepository);
+        List<PictureBackfillProgress> progress = new ArrayList<>();
+
+        PictureBackfillResult result = service.backfillExistingRecords(
+                backfillRequest(2, 5, null, true), progress::add);
+
+        assertThat(result.report().getScanned()).isEqualTo(5);
+        assertThat(result.report().getBackfilled()).isEqualTo(5);
+        assertThat(result.lastVoiceCode()).isEqualTo("voice-5");
+        assertThat(result.exhausted()).isTrue();
+        assertThat(maintenanceRepository.queryCursors).containsExactly(null, "voice-2", "voice-4", "voice-5");
+        assertThat(progress)
+                .extracting(PictureBackfillProgress::lastVoiceCode)
+                .containsExactly("voice-2", "voice-4", "voice-5");
+    }
+
+    @Test
+    void backfillStartsAfterCheckpointCursor() throws Exception {
+        Path first = tempDir.resolve("legacy/first.png");
+        Path second = tempDir.resolve("legacy/second.png");
+        Files.createDirectories(first.getParent());
+        Files.write(first, tinyPng());
+        Files.write(second, tinyPng());
+        InMemoryPictureMaintenanceRepository maintenanceRepository = new InMemoryPictureMaintenanceRepository();
+        maintenanceRepository.recordsMissingMetadata.add(record("voice-1", first));
+        maintenanceRepository.recordsMissingMetadata.add(record("voice-2", second));
+        PictureMaintenanceService service = service(
+                new InMemoryPictureRecordRepository(), maintenanceRepository);
+
+        PictureBackfillResult result = service.backfillExistingRecords(
+                backfillRequest(100, 100, "voice-1", true), progress -> { });
+
+        assertThat(result.report().getScanned()).isEqualTo(1);
+        assertThat(result.lastVoiceCode()).isEqualTo("voice-2");
+        assertThat(maintenanceRepository.queryCursors).containsExactly("voice-1");
+    }
+
+    private static PictureBackfillRequest backfillRequest(int batchSize, int limit, String afterVoiceCode,
+                                                           boolean dryRun) {
+        return new PictureBackfillRequest(
+                "medical",
+                "data-team",
+                "legacy-backfill-20260701",
+                batchSize,
+                limit,
+                2,
+                afterVoiceCode,
+                dryRun);
+    }
+
+    private static PictureRecord record(String voiceCode, Path filePath) {
+        PictureRecord record = new PictureRecord();
+        record.setVoiceCode(voiceCode);
+        record.setFilePath(filePath.toString());
+        return record;
     }
 
     private PictureMaintenanceService service(InMemoryPictureRecordRepository pictureRepository,
-                                              InMemoryPictureMaintenanceRepository maintenanceRepository,
-                                              Map<String, Path> staticMappings) {
+                                              InMemoryPictureMaintenanceRepository maintenanceRepository) {
         return new PictureMaintenanceService(
                 pictureRepository,
                 maintenanceRepository,
                 new PictureFileInspector(1024 * 1024),
-                new StaticPicturePathResolver(staticMappings));
+                new StaticPicturePathResolver());
     }
 
     private static byte[] tinyPng() {
@@ -138,10 +211,16 @@ class PictureMaintenanceServiceTest {
     private static final class InMemoryPictureMaintenanceRepository implements PictureMaintenanceRepository {
         private final List<PictureRecord> recordsMissingMetadata = new ArrayList<>();
         private final List<BackfillUpdate> backfilled = new ArrayList<>();
+        private final List<String> queryCursors = new ArrayList<>();
 
         @Override
-        public List<PictureRecord> findRecordsMissingMetadata(String businessArea, int limit) {
-            return recordsMissingMetadata.stream().limit(limit).toList();
+        public List<PictureRecord> findRecordsMissingMetadata(String businessArea, String afterVoiceCode, int limit) {
+            queryCursors.add(afterVoiceCode);
+            return recordsMissingMetadata.stream()
+                    .filter(record -> afterVoiceCode == null || record.getVoiceCode().compareTo(afterVoiceCode) > 0)
+                    .sorted((left, right) -> left.getVoiceCode().compareTo(right.getVoiceCode()))
+                    .limit(limit)
+                    .toList();
         }
 
         @Override
